@@ -1,0 +1,61 @@
+scan_interval: 5m
+baseline_path: ./var/baseline.json
+rule_pack_path: ./configs/rule_pack.example.yaml
+state_dir: ./var
+min_confidence_for_alert: 70
+learning_mode: false
+require_root: false
+first_run_allow_alerts: false
+web_recent_change_days: 14
+
+document_roots:
+  - ./testdata/webroot
+
+path_allowlist_prefixes:
+  - ./testdata/webroot/vendor/
+
+ld_preload_allowlist: []
+
+ld_preload_target_processes:
+  - nginx
+  - apache2
+  - httpd
+  - sshd
+  - cron
+  - CRON
+
+# /proc/pid/maps rwx (fileless / injected anonymous mappings). Enable on Linux web servers after tuning allowlists.
+maps_scan_enabled: false
+maps_watch_processes:
+  - nginx
+  - apache2
+  - httpd
+maps_path_allowlist_prefixes: []
+
+# dpkg md5sums vs on-disk binaries (Tripwire-style). Ubuntu/Debian only.
+integrity_verify_enabled: false
+integrity_paths:
+  - /bin/ls
+  - /bin/ps
+  - /usr/bin/ls
+  - /usr/bin/ps
+  - /usr/bin/ss
+
+# www-data-style recon argv under web workers (light substitute for auditd exec rules).
+web_recon_child_scan_enabled: true
+
+# inotify-backed immediate rescan on authorized_keys changes.
+watch_authorized_keys: false
+watch_debounce: 800ms
+
+# Syslog over UDP (RFC5424 default) — duplicate of stdout JSON as syslog MSG for SIEM listeners.
+syslog_udp:
+  enabled: false
+  host: 10.0.0.50
+  port: 514
+  format: rfc5424
+  facility: local0
+  app_name: ghostcatcher
+  # hostname: my-server
+  # proc_id: "ghostcatcher"
+  max_msg_bytes: 8192

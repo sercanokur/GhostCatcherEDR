@@ -1,0 +1,74 @@
+version: "1.1.0"
+rules:
+  - id: SSH_AUTHKEY_NEW
+    techniques: ["T1098.004"]
+    tactic: persistence
+    min_signals: 1
+    base_score: 75
+    per_signal_bonus: 12
+    cap_score: 100
+    description: New SSH authorized_keys fingerprint vs baseline
+
+  - id: SSH_AUTHKEY_INVALID_LINE
+    techniques: ["T1098.004"]
+    tactic: persistence
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 85
+
+  - id: CRON_HIGH_RISK
+    techniques: ["T1053.003"]
+    tactic: persistence
+    min_signals: 1
+    base_score: 60
+    per_signal_bonus: 15
+    cap_score: 100
+
+  - id: LD_SO_PRELOAD_FILE
+    techniques: ["T1574.006", "T1014"]
+    tactic: defense-evasion
+    min_signals: 1
+    base_score: 95
+    per_signal_bonus: 5
+    cap_score: 100
+
+  - id: PROC_LD_PRELOAD_ENV
+    techniques: ["T1574.006", "T1014"]
+    tactic: defense-evasion
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 12
+    cap_score: 100
+
+  - id: WEB_SHELL_PATTERN
+    techniques: ["T1505.003", "T1059.004"]
+    tactic: persistence
+    min_signals: 2
+    base_score: 55
+    per_signal_bonus: 15
+    cap_score: 100
+
+  - id: PROC_RWX_MEMORY_SEGMENT
+    techniques: ["T1055", "T1505.003"]
+    tactic: defense-evasion
+    min_signals: 1
+    base_score: 80
+    per_signal_bonus: 10
+    cap_score: 100
+
+  - id: BINARY_INTEGRITY_MD5_MISMATCH
+    techniques: ["T1036", "T1574.006"]
+    tactic: defense-evasion
+    min_signals: 1
+    base_score: 85
+    per_signal_bonus: 5
+    cap_score: 100
+
+  - id: WEB_WORKER_RECON_CHILD
+    techniques: ["T1059.004", "T1505.003"]
+    tactic: execution
+    min_signals: 1
+    base_score: 72
+    per_signal_bonus: 12
+    cap_score: 100
