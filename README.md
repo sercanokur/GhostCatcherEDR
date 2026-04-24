@@ -4,7 +4,7 @@ A lightweight **Linux endpoint** detection agent written in **Go**. It runs as a
 
 GhostCatcher focuses on **host-visible** behaviors aligned with common intrusion patterns (web shells, `LD_PRELOAD` hijacking, SSH/cron persistence), using **baselines**, **multi-signal scoring**, and a **versioned rule pack**—not a full EDR suite.
 
-> **Scope:** No kernel driver, no TLS inspection, no managed cloud backend. Complements network sensors (NDR), eBPF tracers, and auditd rather than replacing them.
+> **Scope:** No kernel driver, no TLS inspection, no managed cloud backend. Complements network sensors, eBPF tracers, and auditd rather than replacing them.
 
 ---
 
