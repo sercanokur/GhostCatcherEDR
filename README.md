@@ -4,12 +4,21 @@ A lightweight **Linux endpoint** detection agent written in **Go**. It runs as a
 
 GhostCatcher focuses on **host-visible** behaviors aligned with common intrusion patterns (web shells, `LD_PRELOAD` hijacking, SSH/cron persistence), using **baselines**, **multi-signal scoring**, and a **versioned rule pack**—not a full EDR suite.
 
-> **Scope:** No kernel driver, no TLS inspection, no managed cloud backend. Complements network sensors, eBPF tracers, and auditd rather than replacing them.
+> **Scope:** No kernel driver, no TLS inspection, no managed cloud backend. Complements **IDS** and other network monitoring, eBPF tracers, and auditd rather than replacing them.
+
+---
+
+## Mission
+
+Advanced **APT** groups increasingly treat Linux as a first-class target: the same strategic idea as *living off the land* on other platforms—abuse **built-in tools, legitimate services, and normal administration paths** so activity blends into operations. Linux often underpins **databases, web front ends, and cloud- and platform-control planes**, so for these actors the recurring priorities are **long-lived persistence** (quiet footholds that survive patches and reboots) and **low-noise collection or exfiltration** that does not depend on noisy malware families.
+
+GhostCatcher exists to **shorten the window** where those behaviors go unseen on the host: web-layer backdoors, preload-based evasion, stolen trust in `authorized_keys` and job schedulers, and related local signals that **IDS** or perimeter tools may only infer indirectly. It is an **open, inspectable** layer teams can tune to their estate and feed into a SIEM—**complementary** to IDS, EDR-class stacks, and hunting programs, not a substitute for depth across the full kill chain.
 
 ---
 
 ## Table of contents
 
+- [Mission](#mission)
 - [Features](#features)
 - [What it detects (summary)](#what-it-detects-summary)
 - [Requirements](#requirements)
@@ -382,7 +391,7 @@ Operational messages from the CLI use **stderr** (e.g. `check-config`, baseline 
 
 - **Not** a replacement for enterprise EDR, managed threat hunting, or kernel-level enforcement.
 - **No built-in eBPF** or **auditd** syscall tracing; recon argv and `/proc` trees approximate some of those signals.
-- **No NDR:** correlating cron-driven processes to outbound beacons requires external network monitoring.
+- **Network-side correlation:** linking cron-driven processes to outbound beacons still depends on **IDS** or other network monitoring outside this agent.
 - **Heuristics** can false-positive (especially `maps` RWX and broad PHP patterns)—use **baselines**, **allowlists**, and **`min_confidence_for_alert`**.
 - **Integrity** is `dpkg`-centric; other distros need a different backend if you extend the agent.
 
