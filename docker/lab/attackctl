@@ -1,0 +1,52 @@
+#!/bin/sh
+# GhostCatcher tam lab — saldırı senaryoları (yalnızca izole lab ağı)
+set -e
+GC=/usr/local/bin/ghostcatcher
+CFG=/etc/ghostcatcher/lab.config.yaml
+SCEN=/opt/lab/scenarios
+
+usage() {
+	echo "Kullanım: attackctl <list|apply <ad>|reset|baseline|scan|check>"
+	echo "Tek dosya: sudo sh $SCEN/web-shell.sh  |  tarama: GCLAB_RUN_SCAN=1 sudo sh $SCEN/web-shell.sh"
+	echo "Örnek:  attackctl apply web-shell  &&  attackctl scan"
+}
+
+case "${1:-}" in
+list)
+	echo "Mevcut senaryolar (configs/lab_rule_pack.yaml ile eşleşen kural aileleri):"
+	for f in "$SCEN"/*.sh; do
+		[ -f "$f" ] || continue
+		b=$(basename "$f" .sh)
+		echo "  - $b"
+	done
+	;;
+apply)
+	if [ -z "$2" ]; then usage; exit 1; fi
+	script="$SCEN/${2}.sh"
+	if [ ! -x "$script" ] && [ ! -f "$script" ]; then
+		echo "Senaryo yok: $2 ($script)" >&2
+		exit 1
+	fi
+	sh "$script"
+	echo "Uygulandı: $2"
+	;;
+reset)
+	sh /opt/lab/reset.sh
+	;;
+baseline)
+	"$GC" baseline commit -config "$CFG"
+	;;
+scan|run-once)
+	"$GC" run -config "$CFG" -once
+	;;
+check|check-config)
+	"$GC" check-config -config "$CFG"
+	;;
+""|-h|--help|help)
+	usage
+	;;
+*)
+	usage
+	exit 1
+	;;
+esac

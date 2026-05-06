@@ -1,0 +1,49 @@
+# GhostCatcher docker lab — paths match container mount at /app (see docker-compose).
+scan_interval: 1m
+baseline_path: /var/lib/ghostcatcher/baseline.json
+rule_pack_path: /etc/ghostcatcher/rule_pack.yaml
+state_dir: /var/lib/ghostcatcher
+min_confidence_for_alert: 70
+learning_mode: false
+require_root: false
+first_run_allow_alerts: true
+web_recent_change_days: 14
+
+document_roots:
+  - /app/testdata/webroot
+
+path_allowlist_prefixes: []
+
+ld_preload_allowlist: []
+ld_preload_target_processes:
+  - nginx
+  - apache2
+  - httpd
+  - sshd
+  - cron
+  - CRON
+
+maps_scan_enabled: false
+integrity_verify_enabled: false
+web_recon_child_scan_enabled: true
+watch_authorized_keys: false
+watch_debounce: 800ms
+
+# UDP syslog to optional lab receiver (see docker-compose service syslog)
+syslog_udp:
+  enabled: true
+  host: syslog
+  port: 5514
+  format: rfc5424
+  facility: local0
+  app_name: ghostcatcher
+  max_msg_bytes: 8192
+
+# Push JSON events to Grafana Loki (lab service "loki")
+loki_push:
+  enabled: true
+  url: http://loki:3100
+  insecure: true
+  labels:
+    env: lab
+    job: ghostcatcher

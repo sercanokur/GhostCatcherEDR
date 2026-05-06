@@ -1,0 +1,213 @@
+================================================================================
+DEF CON DEMO LABS – DETAILED OUTLINE (CONFIDENTIAL REVIEWER COPY)
+Project: GhostCatcher (Linux endpoint detection agent)
+================================================================================
+
+1. TOOL IDENTITY
+--------------------------------------------------------------------------------
+Display name:        GhostCatcher
+One-line summary:   Open-source, single-binary Linux endpoint agent: multi-
+                      signal host detection (web/persistence/integrity/net),
+                      baselines, signed rule pack, JSONL to SIEM—no cloud control
+                      plane.
+Category:            Defensive / blue-team; host instrumentation; open security
+                      engineering; complementary to EDR/IDS.
+Language / runtime:  Go 1.22+; single static binary. Optional cgo: YARA. Optional
+                      tag: eBPF (Linux ≥5.8, CAP_BPF).
+Target audience:     SOC analysts, platform engineers, security researchers, CTF
+                      defenders, small teams without EDR budget.
+
+
+2. PROBLEM STATEMENT
+--------------------------------------------------------------------------------
+Advanced actors increasingly treat Linux as a first-class target. Many footholds
+hide in "normal" administration: web-layer backdoors, LD_PRELOAD abuse, stolen
+or altered SSH/cron/systemd/pam/sudoers trust, SUID and capability drift, and
+low-noise network use visible only from /proc. Perimeter and pure network
+telemetry often miss the host-local story. Commercial EDR exists but may be
+inaccessible, opaque, or not tuned for a given estate.
+
+Objective: Shorten the window where these behaviors are invisible on the host, via
+a transparent, inspectable, self-hosted layer teams can audit, tune, and feed
+into existing SIEM workflows.
+
+
+3. WHAT GHOSTCATCHER IS (TECHNICAL)
+--------------------------------------------------------------------------------
+- Deployment: CLI or systemd; recommended root for full /proc, paths, and eBPF
+  (documented in README “Privileges”).
+
+- Data sources: Periodic scans + fsnotify on sensitive paths + realtime sensor
+  stack: eBPF (with build tag) → auditd log tail → /proc polling fallback;
+  optional YARA over disk and memory (with with_yara).
+
+- Detection surface (summary): web-shell style patterns + PHP taint heuristics;
+  ld.so.preload / LD_PRELOAD; SSH keys and sshd config deltas; cron/anacron/at
+  trees with payload normalization; systemd units/timers; shell profiles; PAM and
+  sudoers; user/shadow anomalies; kernel module drift; dynamic linker config;
+  dpkg/rpm-style integrity on watched paths; SUID/SGID and file capability drift;
+  process–ancestry rarity vs baseline; /proc net ↔ fd mapping for reverse shell
+  and listen anomalies; container runtime hints from cgroup; IOC list enrichment.
+
+- Engine: YAML rule pack with optional CEL-style boolean expr; time-windowed
+  correlation; Sigma-lite import; per-rule rate limits; dedup; optional ed25519
+  signature on rule pack; learning_mode / baseline workflow; quarantine vault for
+  high-confidence file evidence; selfguard (binary hash + optional systemd
+  watchdog).
+
+- Output: one JSON object per line (schema documented); stdout; optional sinks:
+  RFC syslog UDP/TCP/TLS, Splunk HEC, Elasticsearch _bulk, Grafana Loki; on-disk
+  spool on sink failure.
+
+- Explicit non-goals: Not a full replacement for commercial EDR; no TLS
+  interception; no managed vendor cloud backend; host-visible only.
+
+
+4. ARCHITECTURE (REVIEWER MAP)
+--------------------------------------------------------------------------------
+Code layout (repository root, representative):
+
+  cmd/agent/              run | -once | baseline commit | check-config | eval
+  internal/sensor/        eBPF, auditd, procpoll backends
+  internal/detect/        web, ldpreload, persistence, memorymaps, integrity,
+                          network, ancestry, yara (stub/optional cgo)
+  internal/rules/         pack load, expr, sigma_lite, ed25519 verify
+  internal/runner/        scan orchestration, emit, dedup, correlation
+  internal/baseline/      JSON snapshot
+  internal/event/         JSONL schema
+  internal/export/        syslog, syslogtcp, splunk, elastic, loki
+  internal/eval/          precision/recall/F1 harness
+  configs/                config.example.yaml, rule_pack.example.yaml
+  testdata/eval/          labeled corpus for eval subcommand
+  systemd/                example unit
+  .github/workflows/      CI (build, test, eval threshold, linters, etc.)
+
+Data flow (high level):
+  sensors + scanners -> candidate events -> rules.Match (expr, min_signals) ->
+  correlator -> rate limit / dedup -> sinks + spool; quarantine; selfguard loop.
+
+
+5. EVALUATION & SCIENTIFIC / ENGINEERING RIGOR
+--------------------------------------------------------------------------------
+- In-repo eval harness: `ghostcatcher eval -corpus testdata/eval -min-f1 <N>`
+  (documented in README; CI uses a minimum F1 to gate regressions—see ci.yml).
+
+- The corpus and thresholds are part of the public method: reviewers can
+  reproduce “does this change break detection quality?” on their machines.
+
+- Reference for methodology: internal/eval (implementation), README "Continuous
+  integration" and "Evaluation" / wiki "Evaluation-Harness" if published.
+
+
+6. BOOTH / DEMO LABS PRESENTATION PLAN
+--------------------------------------------------------------------------------
+6.1 Goals for the live demo
+  - Show the agent is real software (build, help, one scan).
+  - Show one or two unambiguous “alert-shaped” events on benign lab vs injected
+    artifact (see 6.3)—without attacking third-party systems.
+  - Show JSONL output and (optional) a SIEM “shape” in a log viewer (jq, local
+    Splunk/HEC, or a simple Loki test instance)—only if time and network allow.
+
+6.2 Hardware the team will bring
+  - Laptop(s) for presenter and backup.
+  - Optional: NUC or second laptop as “target Linux” with GhostCatcher pre-built.
+  - USB-C / HDMI adapter for display; power strip; extension cord (venue typical).
+
+6.3 Demo scenario (suggested, offline-safe)
+  Prepare a **dedicated** VM or container host with:
+  - Clean baseline: `sudo ./ghostcatcher baseline commit -config ...` after
+    install in known-good state.
+  - A **deliberate, labeled** “bad” file under a configured document root (e.g. a
+    synthetic PHP one-liner in a quarantined test tree—never a real compromise of
+    production). Trigger a scan: expect WEB_SHELL* / related rules if configured.
+  - Alternatively, inject a **reversible** persistence artifact in a lab-only path
+    (e.g. copy into a test cron file under a snapshot branch)—document exact
+    steps in a private `DEMO-SCRIPT.md` the team uses at the booth. Roll back
+    after demo.
+
+6.4 What the audience sees
+  - Terminal: build or `./ghostcatcher -h`, `check-config`, `run -once` piping to
+    `head` and `jq` for one event.
+  - Optional slide (1–2): architecture diagram (from wiki Architecture.md source).
+
+6.5 Timeboxing
+  - 3–4 min: problem + one slide + live terminal.
+  - 1–2 min: Q&A; hand out printed QR to repo and wiki (if public).
+
+
+7. PREREQUISITES FOR ON-SITE SUCCESS
+--------------------------------------------------------------------------------
+- Pre-build Linux amd64 binary for Demo Labs laptop (or build from source on site
+  with Go 1.22+ and network to proxy.golang.org if allowed).
+- Test config paths for document roots, baseline_path, rule_pack_path on the demo
+  image **before** travel.
+- Verify: `go test ./...` and `ghostcatcher eval -corpus testdata/eval` pass on
+  the demo branch/tag.
+
+
+8. NETWORK, SAFETY, AND RESPONSIBLE USE
+--------------------------------------------------------------------------------
+- The tool is **defensive**: it reads local host state and writes logs. It does
+  not exploit remote systems.
+- No live internet attack traffic; no targeting of third-party property.
+- Demo data remains on presenter hardware or isolated lab VM; redact any org-
+  specific hostnames in captures shown on screen.
+- If screen recording is shared post-con, use synthetic hostnames and synthetic
+  IOCs.
+
+9. RESOURCES FOR THE REVIEW BOARD (LINKS)
+--------------------------------------------------------------------------------
+9.1 Source code (primary)
+  Repository:        https://github.com/sercanokur/GhostCatcherEDR
+  Main README:         https://github.com/sercanokur/GhostCatcherEDR/blob/main/README.md
+  Example config:      https://github.com/sercanokur/GhostCatcherEDR/blob/main/configs/config.example.yaml
+  Example rule pack:   https://github.com/sercanokur/GhostCatcherEDR/blob/main/configs/rule_pack.example.yaml
+  CI workflow:         https://github.com/sercanokur/GhostCatcherEDR/blob/main/.github/workflows/ci.yml
+  Eval corpus:         https://github.com/sercanokur/GhostCatcherEDR/tree/main/testdata/eval
+
+9.2 Extended documentation (if published)
+  Wiki (optional):     https://github.com/sercanokur/GhostCatcherEDR/wiki
+  In-repo docs:        https://github.com/sercanokur/GhostCatcherEDR/tree/main/docs/wiki
+
+9.3 Pre-recorded demo video (strongly recommended if allowed)
+  Unlisted or public:  <TBD: YouTube or Vimeo URL>
+  Contents (suggested, 3–5 min):
+    - 30s problem statement
+    - 60s build + check-config
+    - 90s run -once on lab VM with synthetic artifact + jq one event
+    - 30s where to read limits (README)
+
+9.4 License
+  MIT: https://github.com/sercanokur/GhostCatcherEDR/blob/main/LICENSE
+
+10. LIMITATIONS (HONEST)
+--------------------------------------------------------------------------------
+- eBPF and YARA are optional; default build may lack some realtime depth.
+- Heuristic detectors (e.g. maps) can false-positive: baselines, allowlists, and
+  min_confidence are required in production.
+- Not every distro has dpkg/rpm verify paths; integrity may skip silently where
+  unsupported.
+
+11. REVIEWER CHECKLIST (QUICK)
+--------------------------------------------------------------------------------
+[ ] Clone repo; read README Mission + Limitations
+[ ] go build -o ghostcatcher ./cmd/agent
+[ ] cp configs/config.example.yaml -> edit minimal paths; ./ghostcatcher check-config
+[ ] go test ./... ; optional: go run ./cmd/agent eval -corpus testdata/eval
+[ ] If video provided: watch at 1.5x for structure, verify no third-party attack
+
+12. TEAM / CONTACT
+--------------------------------------------------------------------------------
+Primary submitter:     Sercan Okur — sercanokur@gmail.com
+Backup contact:        —
+Organization:          Independent
+
+13. AGENDA FOR POST-ACCEPTANCE (INTERNAL)
+--------------------------------------------------------------------------------
+- Tag a release; attach SBOM/artifact if org policy allows.
+- Ensure SECURITY.md with disclosure channel before wide publicity.
+- Prepare printed one-pager + QR (repo + short “what to expect in demo”).
+
+================================================================================
+END OF OUTLINE
+================================================================================

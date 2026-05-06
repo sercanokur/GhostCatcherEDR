@@ -1,0 +1,77 @@
+scan_interval: 5m
+baseline_path: ./var/baseline.json
+rule_pack_path: ./configs/rule_pack.example.yaml
+state_dir: ./var
+min_confidence_for_alert: 70
+learning_mode: false
+require_root: false
+first_run_allow_alerts: false
+web_recent_change_days: 14
+
+document_roots:
+  - ./testdata/webroot
+
+path_allowlist_prefixes:
+  - ./testdata/webroot/vendor/
+
+ld_preload_allowlist: []
+
+ld_preload_target_processes:
+  - nginx
+  - apache2
+  - httpd
+  - sshd
+  - cron
+  - CRON
+
+# /proc/pid/maps rwx (fileless / injected anonymous mappings). Enable on Linux web servers after tuning allowlists.
+maps_scan_enabled: false
+maps_watch_processes:
+  - nginx
+  - apache2
+  - httpd
+maps_path_allowlist_prefixes: []
+
+# dpkg md5sums vs on-disk binaries (Tripwire-style). Ubuntu/Debian only.
+integrity_verify_enabled: false
+integrity_paths:
+  - /bin/ls
+  - /bin/ps
+  - /usr/bin/ls
+  - /usr/bin/ps
+  - /usr/bin/ss
+
+# www-data-style recon argv under web workers (light substitute for auditd exec rules).
+web_recon_child_scan_enabled: true
+
+# inotify-backed immediate rescan on authorized_keys changes.
+watch_authorized_keys: false
+watch_debounce: 800ms
+
+# CVE-2026-31431 ("Copy Fail") detection. Two legs:
+#  1. Live AF_ALG SOCK_SEQPACKET socket() syscalls observed by the
+#     auditd / eBPF sensor and routed through internal/detect/copyfail.
+#  2. Periodic page-cache vs on-disk hash drift on watched SUID binaries.
+# Disable page_cache_check_enabled if the host runs on a filesystem that
+# does not honour POSIX_FADV_DONTNEED (rare); the live leg still works.
+copy_fail:
+  enabled: true
+  page_cache_check_enabled: true
+  # Add operator-specific binaries that legitimately open AF_ALG AEAD
+  # sockets (uncommon outside dm-crypt / dm-verity tooling).
+  allowed_comm_extras: []
+  # Override the default SUID watchlist if your distro ships extras
+  # (e.g. /usr/bin/at, /usr/bin/expiry). Empty = built-in defaults.
+  target_suid_binaries: []
+
+# Syslog over UDP (RFC5424 default) — duplicate of stdout JSON as syslog MSG for SIEM listeners.
+syslog_udp:
+  enabled: false
+  host: 10.0.0.50
+  port: 514
+  format: rfc5424
+  facility: local0
+  app_name: ghostcatcher
+  # hostname: my-server
+  # proc_id: "ghostcatcher"
+  max_msg_bytes: 8192

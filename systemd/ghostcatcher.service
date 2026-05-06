@@ -1,0 +1,15 @@
+[Unit]
+Description=Ghostcatcher Linux behavior detection agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/ghostcatcher run -config /etc/ghostcatcher/config.yaml
+Restart=on-failure
+RestartSec=5
+User=root
+# Full LD_PRELOAD /proc scanning requires root on most systems
+
+[Install]
+WantedBy=multi-user.target

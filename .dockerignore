@@ -1,0 +1,7 @@
+.git
+.github
+**/*_test.go
+docs
+*.md
+!go.mod
+!go.sum

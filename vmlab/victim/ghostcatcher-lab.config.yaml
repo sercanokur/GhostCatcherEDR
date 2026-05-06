@@ -1,0 +1,65 @@
+# VM kurban — install-victim.sh sed ile loki/syslog açar
+scan_interval: 1m
+baseline_path: /var/lib/ghostcatcher/baseline.json
+rule_pack_path: /etc/ghostcatcher/lab_rule_pack.yaml
+state_dir: /var/lib/ghostcatcher
+min_confidence_for_alert: 60
+learning_mode: false
+require_root: true
+first_run_allow_alerts: true
+web_recent_change_days: 30
+document_roots:
+  - /var/www/html
+path_allowlist_prefixes: []
+ld_preload_allowlist: []
+ld_preload_target_processes:
+  - nginx
+  - php-fpm8.2
+  - php-fpm8.3
+  - apache2
+  - httpd
+  - sshd
+  - cron
+  - CRON
+maps_scan_enabled: false
+maps_watch_processes:
+  - nginx
+  - php-fpm8.2
+  - php-fpm8.3
+maps_path_allowlist_prefixes: []
+integrity_verify_enabled: true
+integrity_paths:
+  - /bin/ls
+  - /usr/bin/yes
+web_recon_child_scan_enabled: true
+watch_authorized_keys: true
+watch_sensitive_paths: true
+watch_debounce: 800ms
+network_scan_enabled: true
+network_ip_cidr_allowlist:
+  - 127.0.0.0/8
+  - 10.0.0.0/8
+  - 172.16.0.0/12
+  - 192.168.0.0/16
+  - ::1/128
+  - fe80::/10
+  - fc00::/7
+ancestry_scan_enabled: true
+ioc_ip_files: []
+ioc_hash_files: []
+ioc_domain_files: []
+syslog_udp:
+  enabled: false
+  host: 127.0.0.1
+  port: 5514
+  format: rfc5424
+  facility: local0
+  app_name: ghostcatcher
+  max_msg_bytes: 16384
+loki_push:
+  enabled: false
+  url: http://127.0.0.1:3100
+  insecure: true
+  labels:
+    env: vmlab
+    job: ghostcatcher

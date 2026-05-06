@@ -1,0 +1,236 @@
+# Kapsam: ghostcatcher/internal/detect/* içindeki tüm RuleID'ler (lab / demo).
+# Production için configs/rule_pack.example.yaml kullanın; bu dosya tüm
+# tespitlerin güven skoruna sahip olması içindir.
+version: "1.2.0-lab"
+rules:
+  - id: SSH_AUTHKEY_NEW
+    techniques: [T1098.004]
+    tactic: persistence
+    min_signals: 1
+    base_score: 75
+    per_signal_bonus: 12
+    cap_score: 100
+  - id: SSH_AUTHKEY_INVALID_LINE
+    techniques: [T1098.004]
+    tactic: persistence
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 85
+  - id: CRON_HIGH_RISK
+    techniques: [T1053.003]
+    tactic: persistence
+    min_signals: 1
+    base_score: 60
+    per_signal_bonus: 15
+    cap_score: 100
+  - id: LD_SO_PRELOAD_FILE
+    techniques: [T1574.006, T1014]
+    tactic: defense-evasion
+    min_signals: 1
+    base_score: 95
+    per_signal_bonus: 5
+    cap_score: 100
+  - id: PROC_LD_PRELOAD_ENV
+    techniques: [T1574.006, T1014]
+    tactic: defense-evasion
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 12
+    cap_score: 100
+  - id: WEB_SHELL_PATTERN
+    techniques: [T1505.003, T1059.004]
+    tactic: persistence
+    min_signals: 2
+    base_score: 55
+    per_signal_bonus: 15
+    cap_score: 100
+  - id: PROC_RWX_MEMORY_SEGMENT
+    techniques: [T1055, T1505.003]
+    tactic: defense-evasion
+    min_signals: 1
+    base_score: 80
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: PROC_DELETED_EXEC_SEGMENT
+    techniques: [T1055, T1095]
+    tactic: defense-evasion
+    min_signals: 1
+    base_score: 80
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: PROC_WORLD_WRITABLE_MAPPING
+    techniques: [T1055, T1083]
+    tactic: defense-evasion
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: PROC_UNEXPECTED_TRACER
+    techniques: [T1055, T1012]
+    tactic: defense-evasion
+    min_signals: 1
+    base_score: 75
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: PROC_UNEXPECTED_LIBRARY
+    techniques: [T1055, T1553]
+    tactic: defense-evasion
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: PROC_CAP_ESCALATION
+    techniques: [T1055, T1068]
+    tactic: privilege-escalation
+    min_signals: 1
+    base_score: 75
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: BINARY_INTEGRITY_MD5_MISMATCH
+    techniques: [T1036, T1574.006]
+    tactic: defense-evasion
+    min_signals: 1
+    base_score: 85
+    per_signal_bonus: 5
+    cap_score: 100
+  - id: SUID_INVENTORY_DELTA
+    techniques: [T1548.001, T1055]
+    tactic: privilege-escalation
+    min_signals: 1
+    base_score: 85
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: FILE_CAPABILITY_DELTA
+    techniques: [T1548.001]
+    tactic: privilege-escalation
+    min_signals: 1
+    base_score: 80
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: WEB_WORKER_RECON_CHILD
+    techniques: [T1059.004, T1505.003]
+    tactic: execution
+    min_signals: 1
+    base_score: 72
+    per_signal_bonus: 12
+    cap_score: 100
+  - id: PAM_PERSISTENCE
+    techniques: [T1556.003]
+    tactic: credential-access
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 12
+    cap_score: 100
+  - id: USER_ACCOUNT_ANOMALY
+    techniques: [T1136.001, T1078.001]
+    tactic: persistence
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 12
+    cap_score: 100
+  - id: LD_SO_CONF_CHANGED
+    techniques: [T1574.006]
+    tactic: defense-evasion
+    min_signals: 1
+    base_score: 60
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: KERNEL_MODULE_NEW
+    techniques: [T1014, T1218]
+    tactic: defense-evasion
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: KERNEL_MODLOAD_PATH_CHANGED
+    techniques: [T1014]
+    tactic: defense-evasion
+    min_signals: 1
+    base_score: 65
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: SSHD_CONFIG_ANOMALY
+    techniques: [T1098.004, T1027]
+    tactic: defense-evasion
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: SUDOERS_PERSISTENCE
+    techniques: [T1078, T1055.002]
+    tactic: defense-evasion
+    min_signals: 1
+    base_score: 80
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: SHELL_RC_PERSISTENCE
+    techniques: [T1027, T1083]
+    tactic: persistence
+    min_signals: 1
+    base_score: 60
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: SYSTEMD_PERSISTENCE
+    techniques: [T1053.006, T1543.003]
+    tactic: persistence
+    min_signals: 1
+    base_score: 75
+    per_signal_bonus: 12
+    cap_score: 100
+  - id: PROC_RARE_ANCESTRY
+    techniques: [T1059, T1505.003]
+    tactic: execution
+    min_signals: 1
+    base_score: 65
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: NETWORK_REVERSE_SHELL
+    techniques: [T1059.004, T1571]
+    tactic: command-and-control
+    min_signals: 1
+    base_score: 85
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: NETWORK_UNEXPECTED_LISTEN
+    techniques: [T1571, T1205.002]
+    tactic: command-and-control
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: NETWORK_WEB_WORKER_EGRESS
+    techniques: [T1041, T1071.001]
+    tactic: exfiltration
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: YARA_DISK_MATCH
+    techniques: [T1204.002]
+    tactic: execution
+    min_signals: 1
+    base_score: 80
+    per_signal_bonus: 5
+    cap_score: 100
+  - id: YARA_PROCESS_MATCH
+    techniques: [T1204.002]
+    tactic: execution
+    min_signals: 1
+    base_score: 80
+    per_signal_bonus: 5
+    cap_score: 100
+  - id: CVE_2026_31431_AF_ALG_AEAD
+    techniques: [T1068]
+    tactic: privilege-escalation
+    min_signals: 1
+    base_score: 90
+    per_signal_bonus: 5
+    cap_score: 100
+  - id: CVE_2026_31431_PAGE_CACHE_POISONING
+    techniques: [T1068, T1014]
+    tactic: privilege-escalation
+    min_signals: 1
+    base_score: 95
+    per_signal_bonus: 5
+    cap_score: 100

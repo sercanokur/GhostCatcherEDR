@@ -1,0 +1,50 @@
+GhostCatcher tam atak lab — mimari özeti
+========================================
+
+Tespit ↔ lab senaryosu matrisi: docker/lab/ATTACK-LAB-MATRIX.md
+
+Bileşenler
+----------
+1) lab (docker/lab/Dockerfile)
+   Tek Linux "kurban" konteyneri: nginx + php-fpm + cron + sshd (supervisor).
+   GhostCatcher ikilisi ve /opt/lab/scenarios/* saldırı simülasyonları bu
+   görünür dosya sistemi + /proc üzerinde çalışır; SIEM hattı ile aynı
+   ağda Loki + UDP syslog vardır.
+
+2) Ağ: ghostcatcher-lab
+   - lab → loki:3100 (Loki push)
+   - lab → syslog:5514 (RFC5424 UDP)
+
+3) configs/lab_rule_pack.yaml
+   Tespit motorundaki tüm rule_id'ler için skor; demo/lab dışı üretimde
+   rule_pack.example.yaml kullanılmalıdır.
+
+4) Kırmızı takım (opsiyon)
+   docker compose --profile red up
+   → aynı ağda alpine; lab:80 / lab:22’ye erişim.
+
+5) Hafif imaj (opsiyon)
+   docker compose --profile slim up
+   → yalnızca testdata mount + tek tarama (önceki minimal lab).
+
+Oturum akışı
+------------
+1. docker compose up --build
+2. docker compose exec lab attackctl check
+3. docker compose exec lab attackctl reset        # (isteğe bağlı) senaryo çöpleri
+4. docker compose exec lab attackctl baseline   # tüm kalıcılık / bütünlük
+5. docker compose exec lab attackctl apply <ad>
+6. docker compose exec lab attackctl scan | jq -r .rule_id
+
+Otomatize edilmemiş
+-------------------
+- PROC_R* (maps), PROC_RARE_ANCESTRY, YARA, eBPF: kernel/cgo/üretim
+  ortamına bağımlı; lab.config içinde maps_scan_enabled açıp manuel
+  stres gerekir.
+- AGENT_TAMPERED: selfguard ile.
+
+Baseline düzeltmesi (kod)
+------------------------
+baseline commit artık systemd, pam, sudoers, sshd, users, kmod, ldconf ve
+SUID/capability envanterini de yazar; aksi halde "tüm unit dosyaları yeni"
+gürültüsü oluşur.

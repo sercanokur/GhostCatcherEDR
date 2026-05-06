@@ -1,0 +1,105 @@
+# GhostCatcher tam atak lab'ı: tek kurban imaj (lab) + Loki + UDP syslog
+#
+#   docker compose up --build
+#   docker compose exec lab attackctl check
+#   docker compose exec lab attackctl reset
+#   docker compose exec lab attackctl baseline
+#   docker compose exec lab attackctl apply web-shell
+#   docker compose exec lab attackctl scan | jq -r .rule_id
+#   docker compose exec lab attackctl reset
+#
+# UI (Grafana + Loki):  docker compose --profile ui up --build
+#
+# Sadece hafif ajan (önceki davranış):  docker compose --profile slim up
+
+services:
+  loki:
+    image: grafana/loki:2.9.3
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3100/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  syslog:
+    image: alpine:3.19
+    command:
+      - /bin/sh
+      - -c
+      - |
+        apk add --no-cache netcat-openbsd >/dev/null
+        echo "UDP syslog: 5514"
+        while true; do nc -u -l -p 5514; done
+    ports:
+      - "5514:5514/udp"
+
+  lab:
+    build:
+      context: .
+      dockerfile: docker/lab/Dockerfile
+    depends_on:
+      loki:
+        condition: service_healthy
+      syslog:
+        condition: service_started
+    ports:
+      - "8080:80"
+      - "2222:22"
+    volumes:
+      - lab-state:/var/lib/ghostcatcher
+      - ./docker/lab/lab.config.yaml:/etc/ghostcatcher/lab.config.yaml:ro
+      - ./configs/lab_rule_pack.yaml:/etc/ghostcatcher/rule_pack.yaml:ro
+    # ssh-keygen, nginx, php-fpm, crond, sshd: entrypoint
+    # Kırmızı takım: --profile red ile ayrı konteyner (opsiyonel) aynı ağda
+
+  # Önceki minimal imaj: yalnızca testdata taraması
+  agent:
+    profiles: ["slim"]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    depends_on:
+      loki:
+        condition: service_healthy
+      syslog:
+        condition: service_started
+    volumes:
+      - ./docker/lab.config.yaml:/etc/ghostcatcher/lab.config.yaml:ro
+      - ./configs/rule_pack.example.yaml:/etc/ghostcatcher/rule_pack.yaml:ro
+      - ./testdata:/app/testdata:ro
+      - lab-state:/var/lib/ghostcatcher
+    command:
+      - run
+      - -config
+      - /etc/ghostcatcher/lab.config.yaml
+      - -once
+
+  grafana:
+    image: grafana/grafana:10.2.3
+    profiles: ["ui"]
+    depends_on: [loki]
+    ports:
+      - "3000:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+    volumes:
+      - ./docker/grafana-datasource.yml:/etc/grafana/provisioning/datasources/loki.yaml:ro
+
+  # İsteğe bağlı: curl/ssh ile lab’a karşı; lab ile aynı bridge
+  red:
+    image: alpine:3.19
+    profiles: ["red"]
+    depends_on: [lab]
+    command: ['sh', '-c', 'apk add --no-cache curl openssh-client bash && echo "Hazır: curl http://lab:80/  |  ssh -p 22 root@lab" && sleep infinity']
+
+volumes:
+  lab-state:
+
+networks:
+  default:
+    name: ghostcatcher-lab
