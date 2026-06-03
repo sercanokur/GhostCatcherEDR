@@ -37,7 +37,18 @@ type Rule struct {
 	CorrelateWindow  string   `yaml:"correlate_window"`
 	CorrelateBoost   int      `yaml:"correlate_boost"`
 
+	// KillChainPhase (optional) overrides tactic-derived Lockheed phase.
+	KillChainPhase string `yaml:"kill_chain_phase"`
+
+	// Response (optional) hints the preferred OODA Act for this rule.
+	Response RuleResponse `yaml:"response"`
+
 	compiled *Expr // cached, hydrated during LoadPack
+}
+
+// RuleResponse is per-rule active-response metadata in the rule pack.
+type RuleResponse struct {
+	Action string `yaml:"action"` // alert_only|quarantine_file|kill_process|isolate_host
 }
 
 // CompiledExpr returns the cached compiled expression (or a "true" default

@@ -28,8 +28,9 @@ import (
 //   expr       := disj
 //
 // Supported identifiers (facts):
-//   rule_id, tactic, confidence, entity_path, entity_id, comm, uid, euid,
-//   signals (list of strings), techniques (list of strings), container_runtime.
+//   rule_id, tactic, confidence, severity, kill_chain_phase, entity_path,
+//   entity_id, comm, uid, euid, signals (list of strings), techniques (list
+//   of strings), container_runtime.
 //
 // Supported functions:
 //   signal("X")   ~ "X" in signals
@@ -50,6 +51,8 @@ type EventFacts struct {
 	RuleID           string
 	Tactic           string
 	Confidence       int
+	Severity         string
+	KillChainPhase   string
 	EntityPath       string
 	EntityID         string
 	Comm             string
@@ -135,6 +138,10 @@ func (i identNode) eval(f EventFacts) (any, error) {
 		return f.Tactic, nil
 	case "confidence":
 		return f.Confidence, nil
+	case "severity":
+		return f.Severity, nil
+	case "kill_chain_phase":
+		return f.KillChainPhase, nil
 	case "entity_path":
 		return f.EntityPath, nil
 	case "entity_id":

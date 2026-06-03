@@ -11,6 +11,7 @@ This directory holds the **source** of the GitHub Wiki for GhostCatcher. GitHub 
 | `_Footer.md` | Footer rendered on every page (special name). |
 | `Getting-Started.md` | First install + first scan. |
 | `Architecture.md` | High-level component map. |
+| `Doctrine.md` | OODA, Kill Chain, ATT&CK, defense-in-depth mapping. |
 | `Detections.md` | Per-rule detection coverage. |
 | `Sensors.md` | eBPF / auditd / proc-poll backends. |
 | `Rule-Pack.md` | Rule pack format, expressions, signing, Sigma-lite. |

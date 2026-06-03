@@ -28,10 +28,13 @@ rules:
   - id: LD_SO_PRELOAD_FILE
     techniques: ["T1574.006", "T1014"]
     tactic: defense-evasion
+    kill_chain_phase: installation
     min_signals: 1
     base_score: 95
     per_signal_bonus: 5
     cap_score: 100
+    response:
+      action: quarantine_file
 
   - id: PROC_LD_PRELOAD_ENV
     techniques: ["T1574.006", "T1014"]
@@ -52,10 +55,13 @@ rules:
   - id: PROC_RWX_MEMORY_SEGMENT
     techniques: ["T1055", "T1505.003"]
     tactic: defense-evasion
+    kill_chain_phase: exploitation
     min_signals: 1
     base_score: 80
     per_signal_bonus: 10
     cap_score: 100
+    response:
+      action: kill_process
 
   - id: BINARY_INTEGRITY_MD5_MISMATCH
     techniques: ["T1036", "T1574.006"]
@@ -76,10 +82,13 @@ rules:
   - id: CVE_2026_31431_AF_ALG_AEAD
     techniques: ["T1068"]
     tactic: privilege-escalation
+    kill_chain_phase: exploitation
     min_signals: 1
     base_score: 90
     per_signal_bonus: 5
     cap_score: 100
+    response:
+      action: kill_process
     description: >
       AF_ALG SOCK_SEQPACKET socket() created by a process outside the
       known disk-encryption / kTLS allowlist. This is the mandatory
@@ -100,3 +109,48 @@ rules:
       cached pages. CVE-2026-31431 ("Copy Fail") corrupts cached pages
       of setuid binaries without modifying the file on disk, which is
       exactly the asymmetry this rule reports.
+
+  - id: SENSOR_PTRACE_ATTACH
+    techniques: ["T1055"]
+    tactic: defense-evasion
+    kill_chain_phase: exploitation
+    min_signals: 1
+    base_score: 85
+    per_signal_bonus: 10
+    cap_score: 100
+    response:
+      action: kill_process
+
+  - id: SENSOR_MEMFD_CREATE
+    techniques: ["T1055.001"]
+    tactic: execution
+    kill_chain_phase: exploitation
+    min_signals: 1
+    base_score: 82
+    per_signal_bonus: 10
+    cap_score: 100
+    response:
+      action: kill_process
+
+  - id: SENSOR_INIT_MODULE
+    techniques: ["T1547.006"]
+    tactic: persistence
+    kill_chain_phase: installation
+    min_signals: 1
+    base_score: 88
+    per_signal_bonus: 8
+    cap_score: 100
+    response:
+      action: kill_process
+
+  - id: CREDENTIAL_ACCESS_PROC_DUMP
+    techniques: ["T1003"]
+    tactic: credential-access
+    kill_chain_phase: actions-on-objectives
+    min_signals: 1
+    base_score: 92
+    per_signal_bonus: 5
+    cap_score: 100
+    description: Linux analog of OS credential dumping (e.g. /proc access patterns)
+    response:
+      action: kill_process

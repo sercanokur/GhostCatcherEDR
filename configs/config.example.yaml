@@ -64,6 +64,27 @@ copy_fail:
   # (e.g. /usr/bin/at, /usr/bin/expiry). Empty = built-in defaults.
   target_suid_binaries: []
 
+# OODA Act — active response (defaults to audit: log intended action only).
+respond:
+  enabled: true
+  mode: audit
+  kill_switch: false
+  min_confidence: 85
+  min_severity: high
+  allow_quarantine: true
+  allow_kill_process: true
+  allow_isolate_host: false
+  protected_comms:
+    - sshd
+    - systemd
+    - ghostcatcher
+  protected_pids:
+    - 1
+  isolation_allowlist_cidrs:
+    - 10.0.0.0/8
+  rate_limit_per_action_per_min: 30
+  require_root: true
+
 # Syslog over UDP (RFC5424 default) — duplicate of stdout JSON as syslog MSG for SIEM listeners.
 syslog_udp:
   enabled: false

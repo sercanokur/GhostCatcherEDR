@@ -13,7 +13,11 @@ import (
 //   1.0  - initial shape (rule_id, entity, signals, evidence).
 //   1.1  - added process/file/network/container sub-documents and
 //          correlation_id for cross-event correlation in SIEMs.
-const SchemaVersion = "1.1"
+//   1.2  - kill_chain_phase, defense_layer, soc_escalate, response (OODA Act).
+const SchemaVersion = "1.2"
+
+// DefenseLayerEndpoint is the layer tag for events emitted by this agent.
+const DefenseLayerEndpoint = "endpoint"
 
 type EntityType string
 
@@ -89,6 +93,16 @@ type ContainerContext struct {
 	PodUID  string `json:"pod_uid,omitempty"`
 }
 
+// ResponseContext records the OODA Act phase outcome (audit or enforce).
+type ResponseContext struct {
+	Action         string `json:"action,omitempty"`          // alert_only|quarantine_file|kill_process|isolate_host
+	Mode           string `json:"mode,omitempty"`            // audit|enforce
+	Result         string `json:"result,omitempty"`          // applied|skipped|denied|audit_logged
+	Reason         string `json:"reason,omitempty"`
+	Target         string `json:"target,omitempty"`          // pid, path, or host scope
+	LoopLatencyMS  int64  `json:"loop_latency_ms,omitempty"` // observe (sensor) -> act elapsed
+}
+
 // Event is the stable JSON contract for all detectors.
 type Event struct {
 	SchemaVersion   string   `json:"schema_version"`
@@ -114,6 +128,12 @@ type Event struct {
 	Container     *ContainerContext `json:"container,omitempty"`
 	CorrelationID string            `json:"correlation_id,omitempty"`
 	IOCMatches    []string          `json:"ioc_matches,omitempty"`
+
+	// 1.2 additions — doctrine fields (OODA Act, Kill Chain, defense in depth).
+	KillChainPhase string           `json:"kill_chain_phase,omitempty"`
+	DefenseLayer   string           `json:"defense_layer,omitempty"`
+	SOCEscalate    bool             `json:"soc_escalate,omitempty"`
+	Response       *ResponseContext `json:"response,omitempty"`
 }
 
 func (e *Event) NormalizeDedup() {

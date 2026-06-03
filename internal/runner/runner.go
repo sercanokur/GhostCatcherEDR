@@ -19,8 +19,11 @@ import (
 	"ghostcatcher/internal/detect/memorymaps"
 	"ghostcatcher/internal/detect/network"
 	"ghostcatcher/internal/detect/persistence"
+	"ghostcatcher/internal/detect/sensorlive"
 	"ghostcatcher/internal/detect/web"
 	"ghostcatcher/internal/detect/yara"
+	"ghostcatcher/internal/killchain"
+	"ghostcatcher/internal/respond"
 	"ghostcatcher/internal/emit"
 	"ghostcatcher/internal/event"
 	"ghostcatcher/internal/export"
@@ -56,6 +59,7 @@ type Runner struct {
 	yaraScan   *yara.Scanner
 	sinks      []export.Sink
 	vault      *quarantine.Vault
+	responder  *respond.Engine
 }
 
 func New(cfg *config.Config, pack *rules.Pack) *Runner {
@@ -119,6 +123,7 @@ func New(cfg *config.Config, pack *rules.Pack) *Runner {
 			r.vault = v
 		}
 	}
+	r.responder = respond.NewEngine(&cfg.Respond, r.vault)
 	return r
 }
 
@@ -275,48 +280,67 @@ func (r *Runner) RunOnce() error {
 
 	now := time.Now().UTC()
 	for i := range all {
-		e := &all[i]
-		e.NormalizeDedup()
-		r.enrich(e)
-		// Rule pack expression gate (if the rule declared one). A false
-		// result downgrades the event to learning-only so operators can
-		// audit it without it entering the noisy alert stream.
-		if rule, ok := r.pack.ByID(e.RuleID); ok {
-			facts := factsFromEvent(e)
-			ok, err := rule.CompiledExpr().Eval(facts)
-			if err != nil {
-				slog.Warn("expr eval failed", "rule", e.RuleID, "err", err)
-			}
-			if !ok && !e.LearningOnly {
-				e.LearningOnly = true
-			}
-			if boost := r.correlator.matchBoost(e, rule, now); boost > 0 {
-				if e.Confidence+boost > 100 {
-					e.Confidence = 100
-				} else {
-					e.Confidence += boost
-				}
-				e.Signals = append(e.Signals, "correlation_boost")
-			}
-		}
-		r.correlator.add(e.RuleID, e.Entity.ID, now)
-		if e.LearningOnly {
-			r.emit(e)
-			continue
-		}
-		if e.Confidence < r.cfg.MinConfidenceAlert {
-			r.emit(e)
-			continue
-		}
-		if r.shouldDedup(e.DedupKey) {
-			continue
-		}
-		if !r.limiter.Allow(e.RuleID) {
-			continue
-		}
-		r.emit(e)
+		r.processEvent(&all[i], time.Time{}, now)
 	}
 	return nil
+}
+
+// processEvent runs Orient -> Decide -> Act -> emit gates for one event.
+// observedAt is the sensor observe time for dwell-time metrics (zero for scans).
+func (r *Runner) processEvent(e *event.Event, observedAt, now time.Time) {
+	e.NormalizeDedup()
+	r.orient(e)
+	rule, hasRule := r.pack.ByID(e.RuleID)
+	if hasRule {
+		facts := factsFromEvent(e)
+		ok, err := rule.CompiledExpr().Eval(facts)
+		if err != nil {
+			slog.Warn("expr eval failed", "rule", e.RuleID, "err", err)
+		}
+		if !ok && !e.LearningOnly {
+			e.LearningOnly = true
+		}
+		if boost := r.correlator.matchBoost(e, rule, now); boost > 0 {
+			if e.Confidence+boost > 100 {
+				e.Confidence = 100
+			} else {
+				e.Confidence += boost
+			}
+			e.Signals = append(e.Signals, "correlation_boost")
+		}
+	}
+	r.correlator.add(e.RuleID, e.Entity.ID, now)
+	if r.responder != nil {
+		plan := r.responder.Decide(e, rule)
+		r.responder.Apply(plan, e, observedAt)
+	}
+	if e.LearningOnly {
+		r.emit(e)
+		return
+	}
+	if e.Confidence < r.cfg.MinConfidenceAlert {
+		r.emit(e)
+		return
+	}
+	if r.shouldDedup(e.DedupKey) {
+		return
+	}
+	if !r.limiter.Allow(e.RuleID) {
+		return
+	}
+	r.emit(e)
+}
+
+// orient applies doctrine context: enrich, kill-chain phase, defense layer.
+func (r *Runner) orient(e *event.Event) {
+	r.enrich(e)
+	rule, ok := r.pack.ByID(e.RuleID)
+	override := ""
+	if ok {
+		override = rule.KillChainPhase
+	}
+	e.KillChainPhase = killchain.PhaseFor(e.Tactic, override)
+	e.DefenseLayer = event.DefenseLayerEndpoint
 }
 
 // factsFromEvent builds the EventFacts view that rule expressions evaluate
@@ -324,13 +348,15 @@ func (r *Runner) RunOnce() error {
 // natural to write.
 func factsFromEvent(e *event.Event) rules.EventFacts {
 	f := rules.EventFacts{
-		RuleID:     e.RuleID,
-		Tactic:     e.Tactic,
-		Confidence: e.Confidence,
-		EntityPath: e.Entity.Path,
-		EntityID:   e.Entity.ID,
-		Signals:    append([]string(nil), e.Signals...),
-		Techniques: append([]string(nil), e.TechniqueIDs...),
+		RuleID:         e.RuleID,
+		Tactic:         e.Tactic,
+		Confidence:     e.Confidence,
+		Severity:       string(e.Severity),
+		KillChainPhase: e.KillChainPhase,
+		EntityPath:     e.Entity.Path,
+		EntityID:       e.Entity.ID,
+		Signals:        append([]string(nil), e.Signals...),
+		Techniques:     append([]string(nil), e.TechniqueIDs...),
 	}
 	if e.Process != nil {
 		f.Comm = e.Process.Comm
@@ -414,6 +440,8 @@ func (r *Runner) shouldDedup(key string) bool {
 }
 
 func (r *Runner) emit(e *event.Event) {
+	e.DefenseLayer = event.DefenseLayerEndpoint
+	e.SOCEscalate = shouldSOCEscalate(e)
 	b, err := e.JSONLine()
 	if err != nil {
 		return
@@ -439,9 +467,8 @@ func (r *Runner) emit(e *event.Event) {
 			}
 		}
 	}
-	// Quarantine on high-confidence file events. We ignore errors to avoid
-	// turning a detection into a noisy secondary failure.
-	if r.vault != nil && e.Entity.Type == event.EntityFile && e.Entity.Path != "" &&
+	// Legacy quarantine when the response engine is disabled.
+	if !r.cfg.Respond.Enabled && r.vault != nil && e.Entity.Type == event.EntityFile && e.Entity.Path != "" &&
 		!e.LearningOnly && e.Confidence >= r.cfg.QuarantineMinConfidence && r.cfg.QuarantineMinConfidence > 0 {
 		if stored, err := r.vault.Store(e.Entity.Path, e); err == nil {
 			slog.Info("quarantined", "path", e.Entity.Path, "stored", stored)
@@ -449,6 +476,16 @@ func (r *Runner) emit(e *event.Event) {
 			slog.Debug("quarantine failed", "err", err)
 		}
 	}
+}
+
+func shouldSOCEscalate(e *event.Event) bool {
+	if e.Severity == event.SeverityHigh || e.Severity == event.SeverityCritical {
+		return true
+	}
+	if e.Response != nil && e.Response.Action != "" && e.Response.Action != respond.ActionAlertOnly {
+		return true
+	}
+	return false
 }
 
 // RunLoop blocks, running scans on interval until ctx cancelled - caller can use signal.
@@ -523,7 +560,7 @@ func (r *Runner) checkBinaryHash() {
 			Signals:         []string{"self_binary_hash_mismatch"},
 			Evidence:        err.Error(),
 		}
-		r.emit(&ev)
+		r.processEvent(&ev, time.Time{}, time.Now().UTC())
 	}
 }
 
@@ -540,15 +577,11 @@ func (r *Runner) watchdogLoop(interval time.Duration, stop <-chan struct{}) {
 	}
 }
 
-// consumeSensor drains the sensor channel. For now we debounce a scan
-// when certain high-signal kinds fire; future phases will correlate
-// the raw events in-process. AF_ALG SOCK_SEQPACKET socket() syscalls
-// are routed straight through the copyfail detector (CVE-2026-31431)
-// because they are by themselves the mandatory first step of the
-// public exploits and waiting for the next periodic scan would let
-// the attacker finish before we alert.
+// consumeSensor drains the sensor channel. High-fidelity syscalls run the
+// inline OODA fast path (milliseconds). Periodic RunOnce remains the
+// safety net for at-rest state.
 func (r *Runner) consumeSensor(ctx context.Context, ch <-chan sensor.Event) {
-	var last time.Time
+	fast := sensorlive.FastKinds()
 	for {
 		select {
 		case <-ctx.Done():
@@ -557,56 +590,27 @@ func (r *Runner) consumeSensor(ctx context.Context, ch <-chan sensor.Event) {
 			if !ok {
 				return
 			}
+			if _, isFast := fast[ev.Kind]; !isFast {
+				continue
+			}
+			observedAt := ev.When
+			if observedAt.IsZero() {
+				observedAt = time.Now()
+			}
 			if r.cfg.CopyFail.Enabled && ev.Kind == sensor.KindSocket {
 				if cfEv, hit := copyfail.RouteSensorEvent(r.cfg, r.pack, AgentVersion, ev); hit {
-					r.dispatchEvent(&cfEv)
+					r.dispatchEvent(&cfEv, observedAt)
 				}
 				continue
 			}
-			switch ev.Kind {
-			case sensor.KindPtrace, sensor.KindInitModule, sensor.KindMemfdCreate:
-			default:
-				continue
+			if liveEv, hit := sensorlive.RouteSensorEvent(r.cfg, r.pack, AgentVersion, ev); hit {
+				r.dispatchEvent(&liveEv, observedAt)
 			}
-			if time.Since(last) < 5*time.Second {
-				continue
-			}
-			last = time.Now()
-			go func() { _ = r.RunOnce() }()
 		}
 	}
 }
 
-// dispatchEvent normalises and emits a single live event produced
-// outside the periodic scan loop. It mirrors the rate-limit / dedup /
-// expression-gate behaviour of RunOnce so live-routed detections
-// share the same suppression rules as scan-driven ones.
-func (r *Runner) dispatchEvent(e *event.Event) {
-	e.NormalizeDedup()
-	r.enrich(e)
-	if rule, ok := r.pack.ByID(e.RuleID); ok {
-		facts := factsFromEvent(e)
-		ok, err := rule.CompiledExpr().Eval(facts)
-		if err != nil {
-			slog.Warn("expr eval failed", "rule", e.RuleID, "err", err)
-		}
-		if !ok && !e.LearningOnly {
-			e.LearningOnly = true
-		}
-	}
-	if e.LearningOnly {
-		r.emit(e)
-		return
-	}
-	if e.Confidence < r.cfg.MinConfidenceAlert {
-		r.emit(e)
-		return
-	}
-	if r.shouldDedup(e.DedupKey) {
-		return
-	}
-	if !r.limiter.Allow(e.RuleID) {
-		return
-	}
-	r.emit(e)
+// dispatchEvent runs the full OODA pipeline for a live-routed detection.
+func (r *Runner) dispatchEvent(e *event.Event, observedAt time.Time) {
+	r.processEvent(e, observedAt, time.Now().UTC())
 }

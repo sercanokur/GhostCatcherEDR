@@ -9,8 +9,9 @@ There is one long-lived process per host. It maintains:
 - a periodic **scan loop** driven by `scan_interval` (full sweep across all detectors),
 - a **realtime sensor** goroutine (`internal/sensor`) that picks the best available backend at startup and forwards exec/openat/connect/ptrace/init_module/memfd events,
 - one or more **fsnotify** goroutines watching sensitive paths,
-- an **emit pipeline** that runs rule expressions, the correlator, the rate limiter, and every configured sink, and
-- a **selfguard** goroutine that re-hashes the agent binary and pings the systemd watchdog.
+- an **emit pipeline** that runs rule expressions, the correlator, the rate limiter, the **OODA Act** responder (`internal/respond`), and every configured sink,
+- a **live-sensor fast path** that runs Observe→Act inline for high-fidelity syscalls (see [Doctrine](Doctrine)),
+- and a **selfguard** goroutine that re-hashes the agent binary and pings the systemd watchdog.
 
 ```text
                          +-----------------------+

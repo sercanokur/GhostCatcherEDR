@@ -21,7 +21,7 @@ No. There is no telemetry, license check, or external dependency at runtime. The
 
 ## Can it block? (active response)
 
-Not yet. Today GhostCatcher detects, alerts, quarantines (file copy, never delete), and self-protects. Active response (kill -9, iptables drop, container halt) is intentionally deferred — the failure modes of an EDR that can stop your production workload are severe and need careful design. Track the upstream roadmap if this matters to you.
+Yes, with guardrails. The OODA **Act** phase is implemented in `internal/respond` and defaults to **`mode: audit`** (logs the intended action only). Set `respond.mode: enforce` and enable per-action flags (`allow_kill_process`, `allow_quarantine`, `allow_isolate_host`) to actually kill processes, copy artifacts to the vault, or apply coarse host isolation (Linux + root). Protected PIDs/comms, rate limits, and `kill_switch` prevent accidents. See **[Doctrine](Doctrine)** and `respond:` in **[Configuration](Configuration)**.
 
 ## How heavy is it?
 

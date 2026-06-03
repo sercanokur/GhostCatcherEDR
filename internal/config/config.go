@@ -99,6 +99,26 @@ type Config struct {
 	// CVE-2026-31431 ("Copy Fail") — algif_aead AEAD page-cache poisoning
 	// detector. See internal/detect/copyfail.
 	CopyFail CopyFailConfig `yaml:"copy_fail"`
+
+	// Respond — OODA Act (audit-first active response).
+	Respond ResponseConfig `yaml:"respond"`
+}
+
+// ResponseConfig tunes active response. Mode defaults to audit (log intent only).
+type ResponseConfig struct {
+	Enabled                   bool     `yaml:"enabled"`
+	Mode                      string   `yaml:"mode"` // audit|enforce
+	KillSwitch                bool     `yaml:"kill_switch"`
+	MinConfidence             int      `yaml:"min_confidence"`
+	MinSeverity               string   `yaml:"min_severity"`
+	AllowQuarantine           bool     `yaml:"allow_quarantine"`
+	AllowKillProcess          bool     `yaml:"allow_kill_process"`
+	AllowIsolateHost          bool     `yaml:"allow_isolate_host"`
+	ProtectedComms            []string `yaml:"protected_comms"`
+	ProtectedPIDs             []int    `yaml:"protected_pids"`
+	IsolationAllowlistCIDRs   []string `yaml:"isolation_allowlist_cidrs"`
+	RateLimitPerActionPerMin  int      `yaml:"rate_limit_per_action_per_min"`
+	RequireRoot               bool     `yaml:"require_root"`
 }
 
 // CopyFailConfig tunes the CVE-2026-31431 detector. Defaults err on the
@@ -230,6 +250,19 @@ func Default() *Config {
 		CopyFail: CopyFailConfig{
 			Enabled:               true,
 			PageCacheCheckEnabled: true,
+		},
+		Respond: ResponseConfig{
+			Enabled:                  true,
+			Mode:                     "audit",
+			MinConfidence:            85,
+			MinSeverity:              "high",
+			AllowQuarantine:          true,
+			AllowKillProcess:         true,
+			AllowIsolateHost:         false,
+			ProtectedComms:           []string{"sshd", "systemd", "ghostcatcher"},
+			ProtectedPIDs:            []int{1},
+			RateLimitPerActionPerMin: 30,
+			RequireRoot:              true,
 		},
 	}
 }

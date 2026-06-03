@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"ghostcatcher/internal/attack"
 	"ghostcatcher/internal/baseline"
 	"ghostcatcher/internal/config"
 	"ghostcatcher/internal/detect/ancestry"
@@ -41,6 +42,8 @@ func main() {
 		baselineCommit(os.Args[3:])
 	case "eval":
 		evalCmd(os.Args[2:])
+	case "coverage":
+		coverageCmd(os.Args[2:])
 	default:
 		usage()
 		os.Exit(2)
@@ -48,7 +51,31 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: ghostcatcher <run|check-config|baseline commit|eval> [-config path]")
+	fmt.Fprintln(os.Stderr, "usage: ghostcatcher <run|check-config|baseline commit|eval|coverage> [-config path]")
+}
+
+func coverageCmd(args []string) {
+	fs := flag.NewFlagSet("coverage", flag.ExitOnError)
+	cfgPath := fs.String("config", "configs/config.example.yaml", "config file")
+	navigator := fs.String("navigator", "", "write ATT&CK Navigator layer JSON to path")
+	gapsOnly := fs.Bool("gaps", false, "print only baseline techniques not covered by the rule pack")
+	_ = fs.Parse(args)
+	_, pack := loadCfgAndPack(*cfgPath)
+	if *navigator != "" {
+		if err := attack.WriteNavigatorLayer(pack, *navigator); err != nil {
+			slog.Error("navigator write failed", "err", err)
+			os.Exit(1)
+		}
+		slog.Info("navigator layer written", "path", *navigator)
+	}
+	if *gapsOnly {
+		cov := attack.Analyze(pack)
+		for _, id := range cov.Uncovered {
+			fmt.Println(id)
+		}
+		return
+	}
+	fmt.Print(attack.SummaryText(pack))
 }
 
 func evalCmd(args []string) {
