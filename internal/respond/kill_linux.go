@@ -24,10 +24,7 @@ func (eng *Engine) killProcess(target string) error {
 }
 
 func parsePIDTarget(target string) (int, error) {
-	target = strings.TrimSpace(target)
-	if strings.HasPrefix(target, "pid:") {
-		target = strings.TrimPrefix(target, "pid:")
-	}
+	target = strings.TrimPrefix(strings.TrimSpace(target), "pid:")
 	pid, err := strconv.Atoi(strings.TrimSpace(target))
 	if err != nil || pid <= 0 {
 		return 0, fmt.Errorf("invalid pid target %q", target)
