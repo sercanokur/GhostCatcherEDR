@@ -100,8 +100,22 @@ type Config struct {
 	// detector. See internal/detect/copyfail.
 	CopyFail CopyFailConfig `yaml:"copy_fail"`
 
+	// SuddenRoot — behavior-only non-root → root credential transitions.
+	// See internal/detect/privesc.
+	SuddenRoot SuddenRootConfig `yaml:"sudden_root"`
+
 	// Respond — OODA Act (audit-first active response).
 	Respond ResponseConfig `yaml:"respond"`
+}
+
+// SuddenRootConfig tunes the behavior-only sudden-root detector.
+// SnapshotInterval defaults to 1s; legit setuid helpers are allowlisted
+// by basename and may be extended by the operator.
+type SuddenRootConfig struct {
+	Enabled               bool     `yaml:"enabled"`
+	SnapshotInterval      Duration `yaml:"snapshot_interval"`
+	AllowedExeBasenames   []string `yaml:"allowed_exe_basenames"`
+	AllowedAncestorComms  []string `yaml:"allowed_ancestor_comms"`
 }
 
 // ResponseConfig tunes active response. Mode defaults to audit (log intent only).
@@ -251,6 +265,10 @@ func Default() *Config {
 			Enabled:               true,
 			PageCacheCheckEnabled: true,
 		},
+		SuddenRoot: SuddenRootConfig{
+			Enabled:          true,
+			SnapshotInterval: Duration(time.Second),
+		},
 		Respond: ResponseConfig{
 			Enabled:                  true,
 			Mode:                     "audit",
@@ -284,6 +302,9 @@ func Load(path string) (*Config, error) {
 	}
 	if c.WebRecentDays <= 0 {
 		c.WebRecentDays = 14
+	}
+	if c.SuddenRoot.Enabled && c.SuddenRoot.SnapshotInterval.Duration() <= 0 {
+		c.SuddenRoot.SnapshotInterval = Duration(time.Second)
 	}
 	return c, nil
 }

@@ -69,6 +69,7 @@ GhostCatcher exists to **shorten the window** where those behaviors go unseen on
 | **IOC feed weighting** | Flat-file hash / IP / CIDR / domain feeds cross-referenced at emit; network IOC hits add +25 confidence, file-hash hits +10. |
 | **Container context** | Classifies Docker / containerd / cri-o / k8s / lxc IDs and Pod UIDs from `/proc/[pid]/cgroup`. |
 | **CVE-2026-31431 ("Copy Fail")** | Two-leg coverage in `internal/detect/copyfail`: (1) live AF_ALG `SOCK_SEQPACKET` `socket()` syscalls observed by the auditd / eBPF sensor and routed through the detector when the calling `comm` is outside a small disk-encryption / kTLS allowlist (`cryptsetup`, `systemd-cryptse`, `veritysetup`, `kcapi-*`); (2) periodic page-cache vs on-disk hash drift on watched SUID binaries (`/usr/bin/su`, `sudo`, `passwd`, `mount`, …) using `posix_fadvise(POSIX_FADV_DONTNEED)` to bypass the page cache. The page-cache leg catches the actual exploit's effect — corrupted cached pages of a `setuid` root binary that still hashes "clean" on disk. |
+| **Sudden root** | Behavior-only credential transition in `internal/detect/privesc`: tracks each process by `PID + starttime`, seeds from live `exec` events, and polls `/proc` every 1s for non-root → `euid=0` / full-`CapEff` jumps. Known helpers (`sudo`/`su`/`pkexec`/…) are allowlisted; emits `PROC_SUDDEN_ROOT` with `alert_only` response (no CVE mapping). |
 
 ### Engine
 
@@ -113,7 +114,7 @@ Rules are defined in the YAML **rule pack**; each emitted event includes `techni
 - **T1556.003** / **T1548.003** — PAM modules, sudoers escalation paths.
 - **T1562.001** — tampering of agent binary (`AGENT_TAMPERED`).
 - **T1571** / **T1041** / **T1071.001** — unexpected listens, web worker egress, reverse-shell outbound.
-- **T1068** / **T1014** — CVE-2026-31431 ("Copy Fail") AF_ALG AEAD socket creation by an untrusted process (`CVE_2026_31431_AF_ALG_AEAD`) and SUID-binary page-cache poisoning (`CVE_2026_31431_PAGE_CACHE_POISONING`).
+- **T1068** / **T1014** — CVE-2026-31431 ("Copy Fail") AF_ALG AEAD socket creation by an untrusted process (`CVE_2026_31431_AF_ALG_AEAD`) and SUID-binary page-cache poisoning (`CVE_2026_31431_PAGE_CACHE_POISONING`); behavior-only sudden root (`PROC_SUDDEN_ROOT`).
 
 Exact scoring, `min_signals`, correlation windows and boolean expressions per rule are in [`configs/rule_pack.example.yaml`](configs/rule_pack.example.yaml).
 
@@ -551,6 +552,7 @@ Operational messages from the CLI use **stderr** (e.g. `check-config`, baseline 
 │   │   ├── network/       # /proc/net/{tcp,tcp6,udp,udp6} × /proc/*/fd reverse-shell + listen delta
 │   │   ├── ancestry/      # PROC_RARE_ANCESTRY
 │   │   ├── copyfail/      # CVE-2026-31431 AF_ALG AEAD + SUID page-cache poisoning
+│   │   ├── privesc/       # behavior-only sudden root (PID+starttime cred transitions)
 │   │   └── yara/          # Stub by default; cgo build with -tags with_yara
 │   ├── event/             # Event schema 1.1 (process / file / network / container / correlation_id)
 │   ├── ioc/               # Hash / IP / CIDR / domain feed loader + enrichment

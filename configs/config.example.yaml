@@ -64,6 +64,18 @@ copy_fail:
   # (e.g. /usr/bin/at, /usr/bin/expiry). Empty = built-in defaults.
   target_suid_binaries: []
 
+# Behavior-only sudden-root detection (CVE-agnostic). Tracks per-process
+# UID/EUID/CapEff via 1s /proc snapshots + live exec sensor seeding.
+# Known helpers (sudo/su/pkexec/...) are allowlisted; response stays
+# alert_only (audit) for this rule.
+sudden_root:
+  enabled: true
+  snapshot_interval: 1s
+  # Extra basenames merged with built-in helpers.
+  allowed_exe_basenames: []
+  # Extra ancestor comms treated as legitimate privilege brokers.
+  allowed_ancestor_comms: []
+
 # OODA Act — active response (defaults to audit: log intended action only).
 respond:
   enabled: true

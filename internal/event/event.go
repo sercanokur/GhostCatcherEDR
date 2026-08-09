@@ -49,13 +49,14 @@ const (
 // ProcessContext is the optional per-event process snapshot; populated by
 // detectors that have a pid.
 type ProcessContext struct {
-	PID        int      `json:"pid,omitempty"`
-	PPID       int      `json:"ppid,omitempty"`
-	Comm       string   `json:"comm,omitempty"`
-	Argv       []string `json:"argv,omitempty"`
-	Exe        string   `json:"exe,omitempty"`
-	UID        int      `json:"uid,omitempty"`
-	EUID       int      `json:"euid,omitempty"`
+	PID           int      `json:"pid,omitempty"`
+	PPID          int      `json:"ppid,omitempty"`
+	Comm          string   `json:"comm,omitempty"`
+	Argv          []string `json:"argv,omitempty"`
+	Exe           string   `json:"exe,omitempty"`
+	UID           int      `json:"uid,omitempty"`
+	EUID          int      `json:"euid,omitempty"`
+	CapEff        string   `json:"cap_eff,omitempty"`
 	AncestorComms []string `json:"ancestor_comms,omitempty"`
 }
 

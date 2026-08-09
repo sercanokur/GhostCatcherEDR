@@ -25,6 +25,7 @@ func FastKinds() map[sensor.Kind]struct{} {
 		sensor.KindInitModule:  {},
 		sensor.KindMemfdCreate: {},
 		sensor.KindSocket:      {}, // copyfail handles socket separately
+		sensor.KindExec:        {}, // privesc seeds credential tracker
 	}
 }
 

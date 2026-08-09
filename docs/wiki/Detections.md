@@ -82,6 +82,15 @@ This page lists what GhostCatcher actually catches today, grouped by attack stag
 
 ## Privilege escalation
 
+### Sudden root (credential transition)
+
+- Tracks each process instance by `PID + starttime` from `/proc`.
+- Hybrid observe: live `exec` sensor seeding plus a **1s** `/proc` credential snapshot loop (independent of `scan_interval`).
+- Alerts when a previously unprivileged instance (`uid≠0` and `euid≠0`) later shows `euid=0`, or jumps to a near-full `CapEff` set.
+- Suppresses known helpers by exe/comm basename (`sudo`, `su`, `pkexec`, `doas`, `passwd`, …) and helper ancestors; temp paths, memfd/`(deleted)` exe, and container context raise confidence.
+- **Rule ID:** `PROC_SUDDEN_ROOT`. **Technique:** T1068. Response defaults to `alert_only` (audit).
+- **Ops note:** cross-user `/proc` visibility needs a root agent; this is behavior-only and not mapped to a CVE ID.
+
 ### SUID / SGID drift
 
 - Walks `$PATH`-like directories. Alerts on:

@@ -87,6 +87,16 @@ rules:
     base_score: 75
     per_signal_bonus: 10
     cap_score: 100
+  - id: PROC_SUDDEN_ROOT
+    techniques: [T1068]
+    tactic: privilege-escalation
+    kill_chain_phase: exploitation
+    min_signals: 1
+    base_score: 80
+    per_signal_bonus: 4
+    cap_score: 100
+    response:
+      action: alert_only
   - id: BINARY_INTEGRITY_MD5_MISMATCH
     techniques: [T1036, T1574.006]
     tactic: defense-evasion

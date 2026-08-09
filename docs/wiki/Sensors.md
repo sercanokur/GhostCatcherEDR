@@ -79,18 +79,23 @@ sensor.Source.Events() ---> runner.consumeSensor goroutine
                               |
               +---------------+----------------+
               |                                |
-   debounced rescan                emit ancestry / network
-   (juicy syscalls only:           events directly
-    ptrace, init_module,
-    memfd_create, exec under
-    a juicy parent)
+   live high-fidelity kinds          emit via OODA pipeline
+   (ptrace, init_module,             directly
+    memfd_create, socket→copyfail,
+    exec→sudden_root credential seed)
 ```
+
+Additionally, when `sudden_root.enabled` is true, a dedicated **1s**
+`/proc` credential snapshot loop compares each process instance
+(`PID + starttime`) for non-root → root transitions and emits
+`PROC_SUDDEN_ROOT` (audit / `alert_only` by default).
 
 ## Tuning
 
 - **Disable the sensor entirely.** Set `sensor.disabled: true` in YAML. The periodic scanner remains active.
 - **Force a backend.** Set `sensor.backend: ebpf | audit | proc`. The agent fails closed if the requested backend cannot start (so production hosts do not silently fall back to a less capable backend).
 - **Backoff on noisy hosts.** `sensor.debounce_ms` controls how aggressively the consumer collapses bursts before triggering a `RunOnce`.
+- **Sudden-root load.** Only UID/EUID/`CapEff`/`exe` snapshots — not full maps or content hashes. Toggle with `sudden_root.enabled` / `sudden_root.snapshot_interval`.
 
 ## What the sensor cannot see
 

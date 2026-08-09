@@ -19,6 +19,7 @@ import (
 	"ghostcatcher/internal/detect/memorymaps"
 	"ghostcatcher/internal/detect/network"
 	"ghostcatcher/internal/detect/persistence"
+	"ghostcatcher/internal/detect/privesc"
 	"ghostcatcher/internal/detect/sensorlive"
 	"ghostcatcher/internal/detect/web"
 	"ghostcatcher/internal/detect/yara"
@@ -60,6 +61,7 @@ type Runner struct {
 	sinks      []export.Sink
 	vault      *quarantine.Vault
 	responder  *respond.Engine
+	privesc    *privesc.Tracker
 }
 
 func New(cfg *config.Config, pack *rules.Pack) *Runner {
@@ -71,6 +73,7 @@ func New(cfg *config.Config, pack *rules.Pack) *Runner {
 		limiter:    emit.NewLimiter(cfg.RateLimitPerRulePerMin),
 		feed:       ioc.NewFeed(),
 		correlator: newCorrelator(2048),
+		privesc:    privesc.NewTracker(8192),
 	}
 	if cfg.SyslogUDP.Enabled {
 		sc, err := syslog.NewUDP(syslog.Config{
@@ -398,6 +401,7 @@ func (r *Runner) enrich(e *event.Event) {
 					Exe:           procfs.ResolveExe(pid),
 					UID:           st.RealUID,
 					EUID:          st.EffUID,
+					CapEff:        st.CapEff,
 					AncestorComms: procfs.Ancestry(pid, 6),
 				}
 			}
@@ -509,6 +513,9 @@ func (r *Runner) RunLoop(stop <-chan struct{}) {
 	} else if err != nil {
 		slog.Warn("sensor backend unavailable", "err", err)
 	}
+	if r.cfg.SuddenRoot.Enabled {
+		go r.suddenRootLoop(ctx)
+	}
 	go func() {
 		<-stop
 		cancel()
@@ -597,6 +604,12 @@ func (r *Runner) consumeSensor(ctx context.Context, ch <-chan sensor.Event) {
 			if observedAt.IsZero() {
 				observedAt = time.Now()
 			}
+			if r.cfg.SuddenRoot.Enabled && ev.Kind == sensor.KindExec {
+				if srEv, hit := privesc.RouteSensorEvent(r.cfg, r.pack, AgentVersion, r.privesc, ev); hit {
+					r.dispatchEvent(&srEv, observedAt)
+				}
+				continue
+			}
 			if r.cfg.CopyFail.Enabled && ev.Kind == sensor.KindSocket {
 				if cfEv, hit := copyfail.RouteSensorEvent(r.cfg, r.pack, AgentVersion, ev); hit {
 					r.dispatchEvent(&cfEv, observedAt)
@@ -605,6 +618,33 @@ func (r *Runner) consumeSensor(ctx context.Context, ch <-chan sensor.Event) {
 			}
 			if liveEv, hit := sensorlive.RouteSensorEvent(r.cfg, r.pack, AgentVersion, ev); hit {
 				r.dispatchEvent(&liveEv, observedAt)
+			}
+		}
+	}
+}
+
+// suddenRootLoop polls /proc credentials on a short interval so same-PID
+// privilege flips are visible even without an exec sensor event.
+func (r *Runner) suddenRootLoop(ctx context.Context) {
+	interval := r.cfg.SuddenRoot.SnapshotInterval.Duration()
+	if interval <= 0 {
+		interval = time.Second
+	}
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			evs, err := privesc.Snapshot(r.cfg, r.pack, AgentVersion, r.privesc)
+			if err != nil {
+				slog.Debug("sudden_root snapshot failed", "err", err)
+				continue
+			}
+			now := time.Now().UTC()
+			for i := range evs {
+				r.dispatchEvent(&evs[i], now)
 			}
 		}
 	}

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GhostCatcher Kill-Chain Console</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="shell">
+    <div class="main">
+      <header class="hero">
+        <p class="brand">GhostCatcher</p>
+        <h1>Kill-chain console</h1>
+        <p class="lede">Step through the DEF CON lab on the victim host. Live SSH output streams in the terminal — detection evidence lands under each act.</p>
+        <div class="hero-actions">
+          <button type="button" id="btn-health" class="btn ghost">Check host</button>
+          <button type="button" id="btn-run-all" class="btn primary">Run full chain</button>
+        </div>
+        <pre id="health" class="health" hidden></pre>
+      </header>
+
+      <ol id="timeline" class="timeline"></ol>
+
+      <footer class="foot">
+        <p>Local UI → SSH → victim scripts → Elasticsearch evidence.</p>
+      </footer>
+    </div>
+
+    <aside class="term-pane" aria-label="Victim terminal">
+      <div class="term-chrome">
+        <span class="term-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="term-title" id="term-title">victim — ssh</span>
+        <button type="button" id="btn-term-clear" class="term-clear">Clear</button>
+      </div>
+      <pre id="term" class="term" tabindex="0"></pre>
+    </aside>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -143,6 +143,22 @@ rules:
     response:
       action: kill_process
 
+  - id: PROC_SUDDEN_ROOT
+    techniques: ["T1068"]
+    tactic: privilege-escalation
+    kill_chain_phase: exploitation
+    min_signals: 1
+    base_score: 80
+    per_signal_bonus: 4
+    cap_score: 100
+    response:
+      action: alert_only
+    description: >
+      A process instance (PID + starttime) that previously ran with
+      non-root credentials gained euid=0 or a near-full CapEff set
+      without matching a known legitimate privilege helper (sudo, su,
+      pkexec, ...). Behavior-only; not mapped to a specific CVE.
+
   - id: CREDENTIAL_ACCESS_PROC_DUMP
     techniques: ["T1003"]
     tactic: credential-access

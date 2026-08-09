@@ -70,6 +70,17 @@ The agent reads a single YAML file (default `configs/config.example.yaml`, produ
 | `ancestry_juicy_parents` | []string | shipped list | Override the parent set. |
 | `ancestry_child_set` | []string | shipped list | Override the child set. |
 
+### Sudden root
+
+| Key | Type | Default | Notes |
+|-----|------|---------|-------|
+| `sudden_root.enabled` | bool | `true` | Behavior-only non-root → root credential transitions (`PROC_SUDDEN_ROOT`). |
+| `sudden_root.snapshot_interval` | duration | `1s` | Lightweight `/proc` UID/EUID/`CapEff` poll (independent of `scan_interval`). |
+| `sudden_root.allowed_exe_basenames` | []string | `[]` | Extra helpers merged with built-in `sudo`/`su`/`pkexec`/… allowlist. |
+| `sudden_root.allowed_ancestor_comms` | []string | `[]` | Extra ancestor `comm`s treated as legitimate privilege brokers. |
+
+Cross-user `/proc` visibility requires a privileged agent. The rule pack response is `alert_only` by default (audit, no kill).
+
 ### Network
 
 | Key | Type | Default | Notes |
