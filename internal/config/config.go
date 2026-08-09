@@ -123,27 +123,27 @@ type Config struct {
 // SnapshotInterval defaults to 1s; legit setuid helpers are allowlisted
 // by basename and may be extended by the operator.
 type SuddenRootConfig struct {
-	Enabled               bool     `yaml:"enabled"`
-	SnapshotInterval      Duration `yaml:"snapshot_interval"`
-	AllowedExeBasenames   []string `yaml:"allowed_exe_basenames"`
-	AllowedAncestorComms  []string `yaml:"allowed_ancestor_comms"`
+	Enabled              bool     `yaml:"enabled"`
+	SnapshotInterval     Duration `yaml:"snapshot_interval"`
+	AllowedExeBasenames  []string `yaml:"allowed_exe_basenames"`
+	AllowedAncestorComms []string `yaml:"allowed_ancestor_comms"`
 }
 
 // ResponseConfig tunes active response. Mode defaults to audit (log intent only).
 type ResponseConfig struct {
-	Enabled                   bool     `yaml:"enabled"`
-	Mode                      string   `yaml:"mode"` // audit|enforce
-	KillSwitch                bool     `yaml:"kill_switch"`
-	MinConfidence             int      `yaml:"min_confidence"`
-	MinSeverity               string   `yaml:"min_severity"`
-	AllowQuarantine           bool     `yaml:"allow_quarantine"`
-	AllowKillProcess          bool     `yaml:"allow_kill_process"`
-	AllowIsolateHost          bool     `yaml:"allow_isolate_host"`
-	ProtectedComms            []string `yaml:"protected_comms"`
-	ProtectedPIDs             []int    `yaml:"protected_pids"`
-	IsolationAllowlistCIDRs   []string `yaml:"isolation_allowlist_cidrs"`
-	RateLimitPerActionPerMin  int      `yaml:"rate_limit_per_action_per_min"`
-	RequireRoot               bool     `yaml:"require_root"`
+	Enabled                  bool     `yaml:"enabled"`
+	Mode                     string   `yaml:"mode"` // audit|enforce
+	KillSwitch               bool     `yaml:"kill_switch"`
+	MinConfidence            int      `yaml:"min_confidence"`
+	MinSeverity              string   `yaml:"min_severity"`
+	AllowQuarantine          bool     `yaml:"allow_quarantine"`
+	AllowKillProcess         bool     `yaml:"allow_kill_process"`
+	AllowIsolateHost         bool     `yaml:"allow_isolate_host"`
+	ProtectedComms           []string `yaml:"protected_comms"`
+	ProtectedPIDs            []int    `yaml:"protected_pids"`
+	IsolationAllowlistCIDRs  []string `yaml:"isolation_allowlist_cidrs"`
+	RateLimitPerActionPerMin int      `yaml:"rate_limit_per_action_per_min"`
+	RequireRoot              bool     `yaml:"require_root"`
 }
 
 // CopyFailConfig tunes the CVE-2026-31431 detector. Defaults err on the

@@ -82,7 +82,8 @@ func readSocketFile(path string) ([]SocketRow, error) {
 }
 
 // parseSocketLine: columns are
-//   sl local_address rem_address st tx_queue:rx_queue tr:tm->when retrnsmt uid timeout inode ...
+//
+//	sl local_address rem_address st tx_queue:rx_queue tr:tm->when retrnsmt uid timeout inode ...
 func parseSocketLine(proto, line string) (SocketRow, error) {
 	fields := strings.Fields(line)
 	if len(fields) < 10 {

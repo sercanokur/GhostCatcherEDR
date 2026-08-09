@@ -16,8 +16,9 @@ type Info struct {
 }
 
 // dockerIDRE pulls a 64-char hex id out of cgroup path fragments like:
-//   12:freezer:/docker/5f2cd1b0...
-//   0::/system.slice/docker-5f2cd1b0.scope
+//
+//	12:freezer:/docker/5f2cd1b0...
+//	0::/system.slice/docker-5f2cd1b0.scope
 var dockerIDRE = regexp.MustCompile(`[0-9a-f]{64}`)
 
 // k8sPodUIDRE captures the pod UID from kubelet cgroup paths. Kubelet
