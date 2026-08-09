@@ -1,8 +1,8 @@
 run:
   timeout: 5m
-  build-tags:
-    - with_yara
-    - with_ebpf
+  # Do not enable with_yara / with_ebpf here: those optional deps are not in
+  # go.mod for the default CI binary. Tag-gated files are still typechecked
+  # when developers build locally with -tags.
 
 linters:
   disable-all: true
