@@ -67,10 +67,8 @@ func (eng *Engine) Decide(e *event.Event, rule rules.Rule) Plan {
 		return Plan{Action: ActionAlertOnly, Mode: eng.mode(), Reason: "below_min_severity", Target: ""}
 	}
 
-	action := ActionAlertOnly
-	if rule.Response.Action != "" {
-		action = rule.Response.Action
-	} else {
+	action := rule.Response.Action
+	if action == "" {
 		action = eng.defaultAction(e)
 	}
 	if !eng.actionEnabled(action) {

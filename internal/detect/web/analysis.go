@@ -187,7 +187,7 @@ func readFileAttributes(fi os.FileInfo) fileAttributes {
 	fa.SetUID = fi.Mode()&os.ModeSetuid != 0
 	fa.SetGID = fi.Mode()&os.ModeSetgid != 0
 	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
-		fa.OwnerUID = uint32(st.Uid)
+		fa.OwnerUID = st.Uid
 	}
 	return fa
 }

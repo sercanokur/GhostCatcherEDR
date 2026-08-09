@@ -40,10 +40,6 @@ func (c *correlator) setChains(chains []taxonomy.Chain) {
 	c.chains = append([]taxonomy.Chain(nil), chains...)
 }
 
-func (c *correlator) add(ruleID, entity string, when time.Time) {
-	c.addFull(ruleID, entity, "", "", when)
-}
-
 func (c *correlator) addFull(ruleID, entity, anchor, confBand string, when time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

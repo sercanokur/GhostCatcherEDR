@@ -96,10 +96,6 @@ func Scan(cfg *config.Config, _ *baseline.Snapshot, pack *rules.Pack, agentVer s
 				if pid != 0 {
 					sigs = append(sigs, "comm:"+comm)
 				}
-				conf, _ := rules.Score(pack, RuleListenNew, sigs)
-				if conf < 40 {
-					conf = 40
-				}
 				events = append(events, buildEvent(RuleListenNew, pid, comm, row, sigs,
 					[]string{"T1571"}, now, cfg, pack, agentVer, true))
 			}
