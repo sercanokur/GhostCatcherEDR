@@ -49,7 +49,7 @@ func LoadSigmaLiteDir(dir string) (*Pack, error) {
 			continue
 		}
 		name := strings.ToLower(e.Name())
-		if !(strings.HasSuffix(name, ".yml") || strings.HasSuffix(name, ".yaml")) {
+		if !strings.HasSuffix(name, ".yml") && !strings.HasSuffix(name, ".yaml") {
 			continue
 		}
 		data, err := os.ReadFile(filepath.Join(dir, e.Name()))

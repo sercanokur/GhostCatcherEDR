@@ -238,7 +238,7 @@ func scanCronRunParts(cfg *config.Config, snap *baseline.Snapshot, pack *rules.P
 		for _, e := range entries {
 			name := e.Name()
 			// run-parts skips names with '.' or ending in '~'
-			if !(strings.Contains(name, ".") || strings.HasSuffix(name, "~")) {
+			if !strings.Contains(name, ".") && !strings.HasSuffix(name, "~") {
 				continue
 			}
 			full := filepath.Join(d, name)

@@ -1,31 +1,47 @@
-run:
-  timeout: 5m
-  # Do not enable with_yara / with_ebpf here: those optional deps are not in
-  # go.mod for the default CI binary. Tag-gated files are still typechecked
-  # when developers build locally with -tags.
+# Keep config in golangci-lint v2 format (required for Go 1.26 CI).
+# Do not enable with_yara / with_ebpf build tags: those optional deps are not
+# in go.mod for the default CI binary.
+version: "2"
 
 linters:
-  disable-all: true
+  default: none
   enable:
     - errcheck
-    - gofmt
     - govet
     - ineffassign
     - misspell
-    - staticcheck
-    - unused
-    - unconvert
     - revive
-
-linters-settings:
-  revive:
+    - staticcheck
+    - unconvert
+    - unused
+  settings:
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
     rules:
-      - name: exported
-        disabled: true
+      - linters:
+          - errcheck
+          - staticcheck
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - errcheck
-        - staticcheck
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

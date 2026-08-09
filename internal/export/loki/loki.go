@@ -39,7 +39,11 @@ func New(cfg Config) (*Client, error) {
 	if cfg.URL == "" {
 		return nil, errors.New("loki: url required")
 	}
-	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: cfg.Insecure}}
+	tlsCfg := &tls.Config{MinVersion: tls.VersionTLS12}
+	if cfg.Insecure {
+		tlsCfg.InsecureSkipVerify = true // #nosec G402 -- operator opt-in for lab/self-signed sinks
+	}
+	tr := &http.Transport{TLSClientConfig: tlsCfg}
 	return &Client{cfg: cfg, h: &http.Client{Transport: tr, Timeout: 10 * time.Second}}, nil
 }
 

@@ -92,8 +92,8 @@ func LoadedSharedObjects(entries []MapEntry) []string {
 		if e.Pathname == "" || strings.HasPrefix(e.Pathname, "[") {
 			continue
 		}
-		if !(strings.HasSuffix(e.Pathname, ".so") ||
-			strings.Contains(e.Pathname, ".so.")) {
+		if !strings.HasSuffix(e.Pathname, ".so") &&
+			!strings.Contains(e.Pathname, ".so.") {
 			continue
 		}
 		seen[e.Pathname] = struct{}{}

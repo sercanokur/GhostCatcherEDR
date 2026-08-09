@@ -106,9 +106,10 @@ func sliceRHS(toks []phpToken, from int) []phpToken {
 func sliceCallArgs(toks []phpToken, from int) []phpToken {
 	depth := 1
 	for i := from; i < len(toks); i++ {
-		if toks[i].value == "(" {
+		switch toks[i].value {
+		case "(":
 			depth++
-		} else if toks[i].value == ")" {
+		case ")":
 			depth--
 			if depth == 0 {
 				return toks[from:i]
