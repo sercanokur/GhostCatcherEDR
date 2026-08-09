@@ -1,3 +1,5 @@
 /ghostcatcher
 /var/
 *.json.tmp
+/defcon/
+/.cursor/
