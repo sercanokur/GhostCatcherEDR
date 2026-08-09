@@ -4,47 +4,67 @@ Every detection event is JSON. The same JSON is delivered to **every** enabled s
 
 When a sink fails (TCP refused, HTTP 5xx, TLS handshake error, etc.) the raw line is appended to the on-disk **spool** at `spool_dir`. On the next successful write to that sink, the spool is drained in order.
 
-## Common payload
+## Common payload (schema 1.3)
 
-The payload is described under **[Detections → Output format](Detections)** and in [`internal/event/event.go`](https://github.com/sercanokur/GhostCatcherEDR/blob/main/internal/event/event.go). Stable top-level fields:
+Contract: [`internal/event/event.go`](https://github.com/sercanokur/GhostCatcherEDR/blob/main/internal/event/event.go). Taxonomy from [`configs/mapping.yaml`](https://github.com/sercanokur/GhostCatcherEDR/blob/main/configs/mapping.yaml) is applied in Orient. See also **[Behavior Taxonomy](Behavior-Taxonomy)**.
 
 ```json
 {
-  "schema_version": "1.1",
+  "schema_version": "1.3",
   "agent_version": "0.2.0",
-  "timestamp": "2026-04-24T19:21:33.018Z",
-  "rule_id": "WEB_SHELL_PATTERN",
-  "rule_pack_version": "2025.04.0",
-  "technique_id": "T1505.003",
-  "tactic": "persistence",
+  "timestamp": "2026-08-09T12:21:33.018Z",
+  "rule_id": "WEB_WORKER_SHELL_CHILD",
+  "rule_pack_version": "2.0.0-lab",
+  "technique_id": ["T1059.004", "T1505.003"],
+  "tactic": "execution",
+  "macro": "M1",
+  "micro": "M1.2",
+  "src": "PROCSCAN",
+  "type": "EVENT",
+  "anchor": "php8.3-fpm.service",
+  "conf_band": "HIGH",
+  "confidence": 88,
   "severity": "high",
-  "confidence": 92,
-  "correlation_id": "8b1f8c7c2e",
+  "chain_id": "CHAIN-1",
+  "evidence_loss": false,
   "learning_only": false,
-  "dedup_key": "WEB_SHELL_PATTERN:/var/www/html/.cache.php:sha256:5e..",
-  "entity": { "type": "file", "path": "/var/www/html/.cache.php" },
+  "entity": { "type": "process", "id": "18120", "path": "/usr/bin/bash" },
   "process": {
     "pid": 18120, "ppid": 17801,
-    "comm": "php-fpm", "exe": "/usr/sbin/php-fpm8.2",
-    "uid": 33, "ancestors": ["nginx","systemd"]
+    "comm": "bash", "exe": "/usr/bin/bash",
+    "uid": 33, "ancestor_comms": ["php-fpm8.3", "systemd"],
+    "cgroup": "/system.slice/php8.3-fpm.service",
+    "systemd_unit": "php8.3-fpm.service"
   },
-  "file": {
-    "sha256": "5e...", "size": 2148, "mode": "0644",
-    "owner": "www-data", "mtime": "2026-04-24T19:20:51Z"
-  },
-  "container": { "runtime": "containerd", "id": "9f2b...", "pod_uid": "ce..." },
-  "signals": ["WEB_SHELL_PATTERN","ENTROPY_HIGH","WEB_TAINT_FLOW"],
-  "evidence": { "matched_patterns": ["eval\\("], "entropy": 6.7 },
-  "ioc_matches": []
+  "signals": ["web_worker_shell_child", "parent_unit:php8.3-fpm.service", "chain:CHAIN-1"],
+  "evidence": "/bin/bash -i",
+  "kill_chain_phase": "exploitation",
+  "defense_layer": "endpoint",
+  "soc_escalate": true,
+  "response": { "action": "alert_only", "mode": "audit", "result": "audit_logged" }
 }
 ```
+
+Index at least `rule_id`, `macro`, `anchor`, `chain_id`, `conf_band`, and `evidence_loss` in your SIEM.
+
+### ID renames (pre-bhv → current)
+
+| Old | New |
+|-----|-----|
+| `NETWORK_REVERSE_SHELL` | `PROC_SOCKET_STDIO` |
+| `NETWORK_UNEXPECTED_LISTEN` | `NETWORK_LISTEN_NEW` |
+| `BINARY_INTEGRITY_MD5_MISMATCH` | `LIB_HASH_MISMATCH` |
+| `SHELL_RC_PERSISTENCE` | `PROFILE_HOOK` |
+| `SENSOR_MEMFD_CREATE` | `PROC_MEMFD_EXEC` |
+| `SENSOR_PTRACE_ATTACH` | `PROC_PTRACE_INJECT` |
+| `SENSOR_INIT_MODULE` | `KERNEL_MODULE_LOAD` |
 
 ## stdout
 
 Always on. Forward via journald, vector, fluent-bit, etc., as a backup channel even when other sinks are configured.
 
 ```bash
-journalctl -u ghostcatcher -o cat | jq 'select(.severity=="critical")'
+journalctl -u ghostcatcher -o cat | jq 'select(.severity=="critical" or .chain_id != null)'
 ```
 
 ## UDP syslog

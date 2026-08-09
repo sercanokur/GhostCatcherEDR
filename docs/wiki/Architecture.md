@@ -1,17 +1,17 @@
 # Architecture
 
-GhostCatcher is a single-binary agent organised into three layers: **sensors** that produce raw signals, **detectors** that interpret them, and an **engine** that scores, correlates, rate-limits, enriches, and ships the resulting events to one or more sinks.
+GhostCatcher is a single-binary agent organised into **sensors**, **detectors** (grouped by bhv macros), and an **engine** that applies taxonomy metadata, scores, correlates (including CHAIN-1…6), rate-limits, enriches, runs OODA Act, and ships schema **1.3** events.
 
 ## Process model
 
-There is one long-lived process per host. It maintains:
+One long-lived process per host maintains:
 
-- a periodic **scan loop** driven by `scan_interval` (full sweep across all detectors),
-- a **realtime sensor** goroutine (`internal/sensor`) that picks the best available backend at startup and forwards exec/openat/connect/ptrace/init_module/memfd events,
-- one or more **fsnotify** goroutines watching sensitive paths,
-- an **emit pipeline** that runs rule expressions, the correlator, the rate limiter, the **OODA Act** responder (`internal/respond`), and every configured sink,
-- a **live-sensor fast path** that runs Observe→Act inline for high-fidelity syscalls (see [Doctrine](Doctrine)),
-- and a **selfguard** goroutine that re-hashes the agent binary and pings the systemd watchdog.
+- a periodic **scan loop** (`scan_interval`) across detectors,
+- a **realtime sensor** (`internal/sensor`) — best of eBPF → auditd → proc-poll,
+- **fsnotify** watchers on sensitive paths (trigger rescans; FIM deltas also come from scanners),
+- an **emit pipeline**: Orient (enrich + taxonomy) → rule `expr` → pairwise + chain correlation → rate limit / dedup → Act (`internal/respond`) → sinks,
+- a **live-sensor fast path** for high-fidelity kinds (`exec`, `openat`, `connect`, `ptrace`, `memfd`, `init_module`, `socket`),
+- **sudden-root** credential polling and **selfguard** binary hash + systemd watchdog.
 
 ```text
                          +-----------------------+
@@ -22,18 +22,24 @@ There is one long-lived process per host. It maintains:
         +-------------+--------------+--------------+--------------+
         |             |              |              |              |
 +-------v-----+  +----v-----+  +-----v------+  +----v-----+  +-----v-----+
-|  scan loop  |  | fsnotify |  |  ancestry  |  |   yara   |  |  ioc enrich|
-| (interval)  |  |  watcher |  |  detector  |  | (optional)|  |            |
+|  scan loop  |  | fsnotify |  |  live nano |  |   yara   |  |  ioc enrich|
+| (interval)  |  |  watcher |  |  routers   |  | (optional)|  |            |
 +-------+-----+  +----+-----+  +-----+------+  +----+-----+  +-----+-----+
         |             |              |              |              |
         +-------------+----+---------+--------------+--------------+
                           |
                 +---------v----------+
-                |  rules.Pack.Match  |  expr eval, signals merge,
-                |  + correlator      |  time-windowed boost
+                |  orient + taxonomy |
+                |  mapping.yaml Apply|
                 +---------+----------+
                           |
                 +---------v----------+
+                |  pack score + expr |
+                |  correlate + CHAIN |
+                +---------+----------+
+                          |
+                +---------v----------+
+                |  respond (OODA Act)|
                 |  rate limit + dedup|
                 +---------+----------+
                           |
@@ -43,69 +49,81 @@ There is one long-lived process per host. It maintains:
 | sinks []       |                  |  spool (NDJSON)  |
 | stdout/syslog/ |--retry-failed--->|  /var/spool/...  |
 | HEC/_bulk/Loki |                  +------------------+
-+-------+--------+
-        |
-+-------v---------+
-|  quarantine     |  (file-based high-confidence events)
-+-----------------+
++----------------+
 ```
 
 ## Source tree
 
 | Directory | Role |
 |-----------|------|
-| `cmd/agent/` | CLI entrypoint with subcommands `run`, `check-config`, `baseline commit`, `eval`. |
+| `cmd/agent/` | CLI: `run`, `check-config`, `baseline commit`, `eval`, `coverage`. |
+| `cmd/demo-console/` | Local kill-chain demo UI. |
+| `configs/mapping.yaml` | bhv Macro→Micro→Nano catalog + CHAIN definitions. |
+| `configs/lab_rule_pack.yaml` | Full-catalog scoring (lab). |
+| `configs/rule_pack.example.yaml` | Production-oriented rule subset. |
+| `bhv.md` | Human-readable Ubuntu behavior tree. |
+| `internal/event/` | Schema **1.3** event contract + `NewFinding`. |
+| `internal/taxonomy/` | Load/apply `mapping.yaml`. |
+| `internal/anchor/` | cgroup → systemd unit primary anchor. |
 | `internal/baseline/` | JSON snapshot load/save. |
-| `internal/config/` | YAML configuration types and loader. |
-| `internal/event/` | Schema 1.1 event struct + JSON encoder. |
-| `internal/procfs/` | Helpers around `/proc` (ancestry, cgroup, env, fds, net, maps). |
-| `internal/sensor/` | Realtime sensor abstraction with `ebpf` / `audit` / `procpoll` backends. |
-| `internal/detect/web/` | Web shell scanner: regex set, normalization pass, entropy, magic byte, taint flow. |
-| `internal/detect/ldpreload/` | `/etc/ld.so.preload` and `/proc/*/environ` checks. |
-| `internal/detect/persistence/` | Cron, systemd, ssh, pam, sudoers, shellrc, users, kmods, ld.so.conf. |
-| `internal/detect/memorymaps/` | RWX, `(deleted)`, TracerPid, CapEff, `.so` allowlist. |
-| `internal/detect/integrity/` | dpkg/rpm verify + SUID/SGID delta + `security.capability` xattr delta. |
-| `internal/detect/network/` | `/proc/net/{tcp,udp}` × `/proc/*/fd` reverse shell + listen drift. |
+| `internal/config/` | YAML config (`mapping_path`, `watched_units`, `fp_allowlist_units`, …). |
+| `internal/procfs/` | `/proc` helpers. |
+| `internal/sensor/` | eBPF / auditd / proc-poll backends. |
+| `internal/detect/web/` | Web shells, docroot write, upload dirs, worker children. |
+| `internal/detect/persistence/` | SSH, cron, systemd, PAM, sudoers, profile, users, kmods. |
+| `internal/detect/fimextra/` | Ubuntu M2.4 / SSH drop-ins / log truncate FIM deltas. |
+| `internal/detect/ldpreload/` | `ld.so.preload` + `LD_PRELOAD` env. |
+| `internal/detect/memorymaps/` | RWX, deleted exe, writable maps, tracer, masquerade. |
+| `internal/detect/integrity/` | dpkg hash verify, SUID/SGID, capabilities. |
+| `internal/detect/network/` | Socket stdio, listen new, web egress, IMDS. |
 | `internal/detect/ancestry/` | `PROC_RARE_ANCESTRY`. |
-| `internal/detect/yara/` | Stub by default; cgo-backed YARA scanner with `with_yara`. |
-| `internal/rules/` | Rule pack loader, expression evaluator, Sigma-lite, ed25519 verify. |
-| `internal/runner/` | Scan orchestration, dedup, correlation glue, emit. |
-| `internal/ioc/` | Hash / IP / CIDR / domain feed loader + matcher. |
-| `internal/quarantine/` | Tamper-resistant evidence vault. |
-| `internal/selfguard/` | Binary hash check + systemd watchdog notify. |
-| `internal/eval/` | Precision/recall/F1 harness used by CI. |
-| `internal/watch/` | fsnotify watcher set. |
-| `internal/export/` | Sink implementations (`syslog`, `syslogtcp`, `splunk`, `elastic`, `loki`). |
+| `internal/detect/privesc/` | `PROC_SUDDEN_ROOT`. |
+| `internal/detect/defense/` | AppArmor/sysctl/firewall/GTFOBins/tmpfs exec/journal. |
+| `internal/detect/credential/` | Shadow/SSH/cloud/app secret access (live openat). |
+| `internal/detect/containeresc/` | Docker/LXD/runc/cgroup escape patterns. |
+| `internal/detect/sensorlive/` | ptrace / memfd / init_module live nanos. |
+| `internal/detect/copyfail/` | CVE-2026-31431. |
+| `internal/detect/yara/` | Optional YARA (build tag). |
+| `internal/rules/` | Rule pack, expr, Sigma-lite, ed25519. |
+| `internal/runner/` | Orchestration, correlator (pairwise + chains), emit. |
+| `internal/respond/` | OODA Act. |
+| `internal/killchain/` | Tactic → Lockheed phase. |
+| `internal/attack/` | ATT&CK coverage / Navigator layer. |
+| `internal/ioc/` | Hash / IP / CIDR / domain feeds. |
+| `internal/quarantine/` | Evidence vault. |
+| `internal/selfguard/` | Binary hash + systemd watchdog. |
+| `internal/eval/` | Precision/recall harness. |
+| `internal/watch/` | fsnotify sensitive paths. |
+| `internal/export/` | syslog / TCP syslog / Splunk / Elastic / Loki. |
 
 ## Data flow
 
-1. **Acquire.** Sensors and scanners produce candidate signals. A scan pass walks `/etc`, `/proc`, document roots, and the cron tree; the realtime sensor pushes `comm`, `pid`, `parent`, `argv`, `cgroup`, etc. into a channel.
-2. **Detect.** Each detector emits zero or more `event.Event` candidates with `Signals[]` and a tentative `Confidence` and `Severity`.
-3. **Match.** `rules.Pack.Match` resolves each candidate against rule definitions: it merges signals, requires `min_signals`, evaluates the optional boolean `expr`, and assigns `RuleID` / `TechniqueID` / `Tactic`.
-4. **Correlate.** The sliding-window correlator (`internal/runner/correlation.go`) checks whether a peer rule fired on the same entity inside `correlate_window`. If yes, the new event gains `correlate_boost` confidence and a `CORRELATION_BOOST` signal.
-5. **Enrich.** `runner.enrich` adds `process` (with ancestor `comm`s), `file`, `network`, and `container` context. It cross-references file hashes and remote IPs against IOC feeds; matches add a confidence bump and an `ioc_matches[]` entry.
-6. **Gate.** `MinConfidenceAlert` decides whether the event is `learning_only` or a real alert. The per-rule rate limiter trims floods.
-7. **Emit.** Every enabled sink receives the JSON line. Failures are appended to the on-disk spool; on the next successful write, the spool drains.
-8. **Quarantine.** File-based events with confidence ≥ `quarantine_min_confidence` are copied to the vault with metadata.
-9. **Self-protect.** The selfguard goroutine periodically re-hashes the agent binary and emits `AGENT_TAMPERED` (severity critical) if it drifts, plus pings systemd via `WATCHDOG=1`.
+1. **Acquire.** Periodic scanners + live sensor + fsnotify produce candidates. Live kinds are routed to nano-specific handlers (credential openat, defense exec, container file/exec, web docroot write, IMDS connect, sensorlive, sudden-root, copyfail).
+2. **Detect.** Detectors emit `event.Event` with `Signals[]` and tentative confidence. `src` reflects the real backend (`AUDIT` / `PROCSCAN` / `FIM` / `INVENTORY`) until eBPF decode is complete.
+3. **Orient.** Enrich process (including `cgroup` / `systemd_unit`), container, IOC; set `anchor`; `taxonomy.Apply` fills macro/micro/src/type/conf_band; derive `kill_chain_phase` and `defense_layer: endpoint`.
+4. **Decide.** Rule pack scores; optional `expr` may force `learning_only`; pairwise `correlate` and ordered **CHAIN-1…6** may boost confidence and set `chain_id` / `evidence_loss`.
+5. **Act.** `respond.Decide` / `Apply` (audit or enforce).
+6. **Gate.** `MinConfidenceAlert`, dedup, per-rule rate limit.
+7. **Emit.** stdout JSONL + sinks; spool on failure; quarantine high-confidence files; selfguard may emit `AGENT_TAMPERED` (M3.3).
 
 ## Concurrency model
 
-- Each scanner is invoked synchronously inside the scan goroutine; expensive scanners (web walking, integrity) are gated by config flags so users can drop them on small hosts.
-- The realtime sensor runs in its own goroutine; juicy events (`ptrace`, `init_module`, `memfd_create`, suspicious `connect`) trigger a debounced `RunOnce` so the periodic scan is not the only line of defense.
-- The fsnotify watcher debounces rapid changes (e.g. systemd reload writing many unit files) before triggering rescans.
-- All sink writes are sequential per-sink; sinks do not block each other and do not block the scan loop.
+- Scanners run synchronously in the scan goroutine; expensive ones are config-gated.
+- The sensor consumer runs in its own goroutine and dispatches live nanos inline (milliseconds Observe→Act).
+- fsnotify debounces bursts before triggering `RunOnce`.
+- Sink writes are sequential per sink and do not block the scan loop.
 
 ## Failure model
 
-- A single sink failure spools, never crashes; the next event drains the spool.
-- A single detector failure logs at WARN and is skipped for that pass; the rest of the scan continues.
-- A failed rule pack signature is fatal at startup — the agent refuses to run with an unverifiable rule set.
-- A failed agent self-hash check emits `AGENT_TAMPERED` and stops pinging the watchdog, which causes systemd to restart the unit.
-- A failed baseline 2FA check refuses to overwrite the snapshot.
+- Sink failure → spool, never crash.
+- Detector failure → WARN, continue scan.
+- Unverifiable signed rule pack → refuse to start.
+- Self-hash mismatch → `AGENT_TAMPERED`, stop watchdog pings (systemd restarts).
+- Baseline 2FA failure → refuse overwrite.
 
 ## Where to go next
 
-- **[Sensors](Sensors)** explains how the eBPF / auditd / proc-poll selection works and what each backend can and cannot see.
-- **[Detections](Detections)** lists the actual rules.
-- **[Rule Pack](Rule-Pack)** explains the YAML format, expressions, correlation, and signing.
+- **[Behavior Taxonomy](Behavior-Taxonomy)** — Macro/Micro/Nano and chains.
+- **[Sensors](Sensors)** — backend selection and live routing.
+- **[Detections](Detections)** — nano inventory.
+- **[Rule Pack](Rule-Pack)** — YAML scoring and expressions.

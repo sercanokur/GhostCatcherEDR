@@ -145,10 +145,10 @@ Self-update is intentionally not implemented. Update GhostCatcher through whatev
 
 - **Pre-startup swap.** If `expected_sha256` is empty and the binary is replaced before the agent starts, the runtime hash becomes the soft baseline. Pin the expected hash in production.
 - **Library substitution.** `selfguard` hashes the binary, not its dynamic libraries. For static linking use `CGO_ENABLED=0` (the default build); if you ship a cgo build (`with_yara`), pin libyara via your package manager and run `dpkg --verify` / `rpm -V` against it via the integrity scanner.
-- **In-memory patching.** A privileged attacker can `ptrace` the running process and patch instructions in memory. The `MAPS_RWX` and `PROC_TRACED` rules cover that case; selfguard alone cannot.
+- **In-memory patching.** A privileged attacker can `ptrace` the running process and patch instructions in memory. `PROC_RWX_MEMORY_SEGMENT` and `PROC_UNEXPECTED_TRACER` / `PROC_PTRACE_INJECT` cover that case; selfguard alone cannot.
 
 ## Cross-references
 
-- **[Detections](Detections)** for `AGENT_TAMPERED`, `MAPS_RWX`, `PROC_TRACED`, the file-based rules that drive quarantine.
+- **[Detections](Detections)** for `AGENT_TAMPERED`, `PROC_RWX_MEMORY_SEGMENT`, `PROC_UNEXPECTED_TRACER`, and the file-based rules that drive quarantine.
 - **[Operations Runbook](Operations-Runbook)** for restart, hash-rotation, and quarantine-archive procedures.
 - **[Configuration](Configuration)** for the YAML keys.

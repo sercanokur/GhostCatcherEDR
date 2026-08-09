@@ -1,27 +1,40 @@
 # EDR Doctrine Layers
 
-GhostCatcher maps four security doctrines into its endpoint pipeline.
+GhostCatcher maps security doctrines onto its endpoint pipeline. The Ubuntu **Macro → Micro → Nano** tree ([Behavior Taxonomy](Behavior-Taxonomy), [`bhv.md`](https://github.com/sercanokur/GhostCatcherEDR/blob/main/bhv.md)) is the detection vocabulary; OODA / Kill Chain / ATT&CK are how those nanos are processed and reported.
+
+## Behavior tree — what we detect
+
+| Macro | Doctrine role |
+|-------|----------------|
+| M1 Web RCE | Initial foothold / webshell / worker abuse |
+| M2 Persistence | Installation via SSH/cron/systemd/Ubuntu hooks |
+| M3 Privesc & defense | Exploitation / defense evasion |
+| M4 Concealment | Anti-forensics / evidence loss |
+| M5 Credentials | Actions on objectives (secrets) |
+| M6 Container escape | Host boundary violation |
+
+Nanos are the atomic `rule_id`s. Chains (CHAIN-1…6) encode multi-step stories with saturating CRITICAL scores.
 
 ## OODA — Detection and response engine
 
 | Phase | GhostCatcher |
 |-------|----------------|
-| **Observe** | eBPF / auditd / proc-poll sensors + periodic scanners |
-| **Orient** | `Runner.orient`: enrich, kill-chain phase, IOC, correlation |
-| **Decide** | Rule pack scoring, expressions, `MinConfidenceAlert`, severity |
+| **Observe** | eBPF / auditd / proc-poll + periodic FIM/INVENTORY/PROCSCAN |
+| **Orient** | Enrich + **taxonomy.Apply** + kill-chain phase + IOC + anchor |
+| **Decide** | Pack scoring, `expr`, pairwise correlate, **CHAIN-1…6**, thresholds |
 | **Act** | `internal/respond` (default **audit**; opt-in **enforce**) |
 
-**Speed:** High-fidelity sensor events (ptrace, memfd, init_module, AF_ALG socket) use the **inline fast path** (`dispatchEvent`) so Observe→Act completes in milliseconds. Periodic scans are the **safety net** for at-rest state.
+**Speed:** Live kinds (`exec`, `openat`, `connect`, `ptrace`, `memfd`, `init_module`, `socket`) use the inline fast path so Observe→Act is milliseconds. Periodic scans are the safety net for at-rest state.
 
-**Dwell time:** Each event may include `response.loop_latency_ms` (sensor observe time → Act).
+**Dwell time:** Events may include `response.loop_latency_ms`.
 
 ## Kill Chain — Where to intervene
 
-Rules may set `kill_chain_phase` or inherit a phase from `tactic` via `internal/killchain`. Early phases (`exploitation`, `installation`) can trigger stronger response actions sooner.
+Rules may set `kill_chain_phase` or inherit from `tactic` via `internal/killchain`. Early phases (`exploitation`, `installation`) can prefer stronger Act actions.
 
 ## MITRE ATT&CK — Rule language
 
-Every rule carries `techniques` and `tactic`; events emit `technique_id` and `tactic`. Run coverage analysis:
+Every nano carries `techniques` / `tactic` (from pack and/or `mapping.yaml`). Events emit `technique_id` and `tactic`. Coverage:
 
 ```bash
 ghostcatcher coverage -config /etc/ghostcatcher/config.yaml
@@ -29,23 +42,23 @@ ghostcatcher coverage -config /etc/ghostcatcher/config.yaml -navigator /tmp/laye
 ghostcatcher coverage -config /etc/ghostcatcher/config.yaml -gaps
 ```
 
+Baseline technique list lives in `internal/attack/catalog.go` (includes T1552.005 IMDS, T1611 escape, T1620 reflective load, etc.).
+
 ## Defense in depth — EDR boundaries
 
 | Layer | Role |
 |-------|------|
-| Perimeter | Upstream of the agent (firewall, WAF) |
+| Perimeter | Upstream (firewall, WAF) |
 | **Endpoint (this agent)** | `defense_layer: endpoint` on every event |
-| SIEM | Syslog / Splunk HEC / Elastic / Loki sinks |
-| SOC | `soc_escalate: true` on high/critical severity or non-alert response |
+| SIEM | Syslog / Splunk HEC / Elastic / Loki |
+| SOC | `soc_escalate` on high/critical or non-alert response |
 
-EDR does not replace perimeter or SOC. It shortens dwell time on the host.
+## Example — Web RCE → cloud credentials (CHAIN-2)
 
-## Credential dumping example (T1003 analog)
+1. **Nanos:** `WEB_WORKER_INTERP_CHILD` → `NETWORK_IMDS_ACCESS` → `CLOUD_CRED_FILE_ACCESS`
+2. **ATT&CK:** T1059.006, T1552.005, T1552.001
+3. **OODA:** Observe (exec + connect + openat) → Orient (same `anchor`/unit, taxonomy M1/M5) → Decide (chain CRITICAL) → Act (audit `alert_only` or escalate)
+4. **Kill Chain:** exploitation → actions-on-objectives
+5. **SIEM:** schema 1.3 JSON with `chain_id: CHAIN-2`, `macro`/`micro`, `conf_band`
 
-1. **ATT&CK:** `T1003` on rule `CREDENTIAL_ACCESS_PROC_DUMP`
-2. **EDR rule:** suspicious `/proc` or ptrace pattern → live sensor fast path
-3. **OODA:** Observe (sensor) → Orient (T1003, `actions-on-objectives`) → Decide (confidence ≥ threshold) → Act (`kill_process` in audit or enforce)
-4. **Kill Chain:** chain break at actions-on-objectives (or installation if earlier)
-5. **Defense in depth:** JSON alert to SIEM with `soc_escalate: true`
-
-Configure response in `respond:` — see [Configuration](Configuration).
+Configure Act in `respond:` — see [Configuration](Configuration).

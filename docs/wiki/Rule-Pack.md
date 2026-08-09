@@ -1,58 +1,74 @@
 # Rule Pack
 
-The rule pack is a versioned YAML document that describes every detection rule the agent ships. Detection logic is **data, not code** — you can add or tune rules without recompiling the agent. This page covers the schema, the boolean expression language, time-windowed correlation, Sigma-lite drop-ins, and ed25519 signing.
+The rule pack is a versioned YAML document that **scores** detections. Nano IDs and Macro/Micro metadata come from [`configs/mapping.yaml`](https://github.com/sercanokur/GhostCatcherEDR/blob/main/configs/mapping.yaml); the pack supplies `base_score`, `expr`, pairwise `correlate`, and optional Act hints. You can add or tune rules without recompiling.
 
-The reference example lives at [`configs/rule_pack.example.yaml`](https://github.com/sercanokur/GhostCatcherEDR/blob/main/configs/rule_pack.example.yaml).
+| Pack | Use |
+|------|-----|
+| [`configs/lab_rule_pack.yaml`](https://github.com/sercanokur/GhostCatcherEDR/blob/main/configs/lab_rule_pack.yaml) | Full bhv catalog scoring (lab/demo) |
+| [`configs/rule_pack.example.yaml`](https://github.com/sercanokur/GhostCatcherEDR/blob/main/configs/rule_pack.example.yaml) | Production-oriented subset |
 
 ## File shape
 
 ```yaml
-version: 2025.04.0
-metadata:
-  vendor: ghostcatcher
-  description: Default detection set
-  min_agent_version: "0.2.0"
-
+version: "2.0.0"
 rules:
   - id: WEB_SHELL_PATTERN
-    technique: T1505.003
+    techniques: [T1505.003, T1059.004]
     tactic: persistence
-    severity: high
-    base_confidence: 60
+    macro: M1
+    micro: M1.1
+    src: FIM
+    type: STATE
+    conf: MEDIUM
     min_signals: 2
-    weights:
-      WEB_SHELL_PATTERN: 30
-      WEB_TAINT_FLOW:    25
-      ENTROPY_HIGH:      10
-      MAGIC_MISMATCH:    10
-      OWNERSHIP_WEB:     5
-    expr: signal("WEB_SHELL_PATTERN") and confidence >= 70
-    correlate: [PROC_RARE_ANCESTRY, NET_REVERSE_SHELL]
-    correlate_window: 10m
+    base_score: 55
+    per_signal_bonus: 15
+    cap_score: 100
+    expr: confidence >= 55
+    correlate: [WEB_WORKER_SHELL_CHILD, PROC_RARE_ANCESTRY]
+    correlate_window: 30m
     correlate_boost: 15
+    response:
+      action: quarantine_file
+
+  - id: CRON_HIGH_RISK
+    techniques: [T1053.003]
+    tactic: persistence
+    macro: M2
+    micro: M2.2
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 60
+    per_signal_bonus: 15
+    cap_score: 100
+    correlate: [WEB_WORKER_SHELL_CHILD, WEB_WORKER_INTERP_CHILD, WEB_DOCROOT_EXEC_WRITE]
+    correlate_window: 30m
+    correlate_boost: 20
 ```
 
 ### Rule fields
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `id` | string | yes | Stable identifier emitted as `rule_id` (bhv nano ID). |
+| `id` | string | yes | Nano ID → event `rule_id`. |
 | `techniques` | list | yes | MITRE ATT&CK technique IDs. |
 | `tactic` | string | no | ATT&CK tactic slug. |
-| `macro` / `micro` | string | no | bhv taxonomy; filled from `mapping.yaml` when empty. |
-| `src` | string | no | Telemetry source (`EBPF-EXEC`, `FIM`, `AUDIT`, …). |
+| `macro` / `micro` | string | no | bhv taxonomy; filled from mapping when empty. |
+| `src` | string | no | `EBPF-EXEC` \| `AUDIT` \| `FIM` \| `PROCSCAN` \| `INVENTORY` \| … |
 | `type` | string | no | `EVENT` \| `DELTA` \| `STATE`. |
 | `conf` | string | no | Standalone band `HIGH` \| `MEDIUM` \| `LOW`. |
-| `min_signals` | int | yes | Minimum number of named signals needed before scoring. |
+| `min_signals` | int | yes | Minimum named signals before scoring. |
 | `base_score` / `per_signal_bonus` / `cap_score` | int | no | Confidence scoring knobs. |
-| `expr` | string | no | Boolean expression; if false the event is downgraded to `learning_only`. |
-| `correlate` | list | no | Peer rule IDs that, if seen on the same **anchor**/entity inside `correlate_window`, contribute `correlate_boost`. |
-| `correlate_window` | duration | no | Go duration string (`30s`, `5m`, `1h`). Default `5m` if `correlate` is set. |
-| `correlate_boost` | int | no | Confidence delta added on a correlated hit. Default `10`. |
+| `expr` | string | no | If false → force `learning_only`. |
+| `correlate` | list | no | Peer nanos; same **anchor** (preferred) or entity within window. |
+| `correlate_window` | duration | no | Default `5m`. |
+| `correlate_boost` | int | no | Default `10`. |
 | `kill_chain_phase` | string | no | Overrides tactic-derived Lockheed phase. |
-| `response.action` | string | no | Preferred OODA Act (`alert_only`, `quarantine_file`, `kill_process`, `isolate_host`). |
+| `response.action` | string | no | `alert_only` \| `quarantine_file` \| `kill_process` \| `isolate_host`. |
 
-The full nano catalog and CHAIN-1…6 definitions live in [`configs/mapping.yaml`](../../configs/mapping.yaml). Events are schema **1.3** (`macro`, `micro`, `src`, `type`, `anchor`, `conf_band`, `chain_id`, `evidence_loss`).
+Events are schema **1.3**. Ordered CHAIN-1…6 definitions live in `mapping.yaml` (evaluated in `internal/runner/correlation.go` in addition to pairwise `correlate`).
 
 ## Expression language
 
@@ -78,121 +94,32 @@ list     := "[" args? "]"
 
 | Function | Returns | Notes |
 |----------|---------|-------|
-| `signal(name)` | bool | True if the candidate event carries that signal. |
-| `technique(id)` | bool | True if the rule's technique matches. |
-| `matches(value, regex)` | bool | RE2 regex match. |
-| `contains(haystack, needle)` | bool | Substring match. |
-| `startswith(s, prefix)` | bool | |
-| `endswith(s, suffix)` | bool | |
-| `len(x)` | int | Length of string or list. |
+| `signal("name")` | bool | True if `signals[]` contains that token (prefix match supported for `foo:bar`). |
+| `technique("T…")` | bool | True if listed in `technique_id`. |
+| `confidence` | int | Current score before Act. |
+| `severity` | string | `info`…`critical`. |
+| `comm` / `uid` / `euid` | | From process context when present. |
+| `entity_path` / `entity_id` | string | Entity identifiers. |
+| `container_runtime` | string | When classified. |
+| `kill_chain_phase` | string | After Orient. |
 
-### Built-in identifiers
+## Pairwise correlation vs chains
 
-| Identifier | Type | Meaning |
-|------------|------|---------|
-| `confidence` | int | Current event confidence after weight + correlate. |
-| `severity` | string | One of the severity enum values. |
-| `entity_path` | string | File path, socket tuple, or process exe path. |
-| `comm` | string | Process `comm`. |
-| `parent_comm` | string | Parent process `comm`. |
-| `cmdline` | string | Whole command line (space-joined argv). |
-| `uid`, `euid`, `pid`, `ppid` | int | |
-| `remote_ip`, `remote_port`, `local_ip`, `local_port` | string/int | |
-| `container_runtime`, `container_id`, `pod_uid` | string | |
-| `learning_only` | bool | Pre-evaluation flag. |
+- **Pairwise** (`correlate:` on a rule): peer fired recently on same anchor/entity → `correlate_boost` + signal `correlation_boost`.
+- **Chains** (`mapping.yaml` `chains:`): ordered steps; current event must advance the chain; boost + `chain_id` + optional `evidence_loss` + severity CRITICAL.
 
-### Examples
-
-```yaml
-expr: signal("WEB_SHELL_PATTERN") and confidence >= 70
-
-expr: comm in ["sh","bash","dash","ash","zsh"]
-      and not parent_comm in ["systemd","init","tmux","sshd"]
-
-expr: matches(entity_path, "^/tmp/.*\\.so$")
-      or contains(entity_path, "/dev/shm/")
-
-expr: technique("T1059.004") and confidence > 80
-```
-
-## Correlation
-
-The runner keeps a sliding-window map of `(rule_id, entity_path) -> last_seen` (`internal/runner/correlation.go`). When a new event matches a rule whose `correlate` list contains a previously-seen rule on the same entity within `correlate_window`:
-
-1. `correlate_boost` is added to the event's confidence.
-2. A synthetic `CORRELATION_BOOST` signal is appended to `signals[]`.
-3. The peer's `rule_id` is recorded in `evidence.correlated_with`.
-
-This is how a single-signal cron edit can become high-confidence when paired with an outbound `nc` from the same host inside ten minutes.
+Prefer anchors (systemd unit) over bare entity IDs so web-worker children correlate with later persistence on the same host unit.
 
 ## Sigma-lite drop-ins
 
-GhostCatcher reads Sigma YAML files from `sigma_lite_dir` and transpiles a subset of the format into native rules. Implementation: [`internal/rules/sigma_lite.go`](https://github.com/sercanokur/GhostCatcherEDR/blob/main/internal/rules/sigma_lite.go).
-
-Supported subset:
-
-- `detection.selection` blocks with `field: value`, `field|contains:`, `field|startswith:`, `field|endswith:`, `field|re:`.
-- A single `condition: selection` (no nested boolean expressions yet — chain at the GhostCatcher rule level instead).
-- `level` mapped to severity (`informational`/`low`/`medium`/`high`/`critical`).
-- `id` mapped to `rule_id` (uppercased, hyphens to underscores), `tags` containing a `attack.tNNNN` mapped to `technique_id`.
-
-Anything outside that subset is logged at WARN and skipped, so a partially-supported pack still loads.
-
-Example:
-
-```yaml
-title: Suspicious base64 in cron
-id: 5fae6c52-6f73-4a3a-9a96-ghostcatcher
-status: experimental
-level: high
-tags: [attack.persistence, attack.t1053.003]
-detection:
-  selection:
-    cmdline|contains:
-      - "base64 -d"
-      - "echo "
-  condition: selection
-```
+`sigma_lite_dir` merges additional YAML after the primary pack. Unsupported Sigma features warn at load. IDs are uppercased with hyphens → underscores to match nano style.
 
 ## Signing
 
-A rule pack can be signed with an ed25519 detached signature. Loading verification is implemented in [`internal/rules/verify.go`](https://github.com/sercanokur/GhostCatcherEDR/blob/main/internal/rules/verify.go).
+When `rule_pack_pubkey_file` and `rule_pack_signature_file` are set, `LoadPack` fail-closes on bad ed25519 detached signatures.
 
-### Generate keys
+## Cross-references
 
-```bash
-openssl genpkey -algorithm Ed25519 -out rulepack.key
-openssl pkey -in rulepack.key -pubout -outform DER \
-  | tail -c 32 | base64 > /etc/ghostcatcher/rulepack.pub
-```
-
-Distribute `rulepack.pub` to every host. Keep `rulepack.key` on a build host or in a hardware token.
-
-### Sign a pack
-
-```bash
-openssl pkeyutl -sign \
-  -inkey rulepack.key \
-  -in /etc/ghostcatcher/rule_pack.yaml \
-  -out /etc/ghostcatcher/rule_pack.yaml.sig
-```
-
-### Configure the agent
-
-```yaml
-rule_pack_path: /etc/ghostcatcher/rule_pack.yaml
-rule_pack_pubkey_file: /etc/ghostcatcher/rulepack.pub
-rule_pack_signature_file: /etc/ghostcatcher/rule_pack.yaml.sig
-```
-
-If the signature does not validate (file tampered, wrong public key, missing files), `ghostcatcher run` exits non-zero before any detection runs. **There is no override flag.** Sigma-lite drop-ins from `sigma_lite_dir` are merged after the signed pack and are not signed by this mechanism — keep them in a directory only root can write.
-
-## Authoring workflow
-
-1. Add the rule (and any supporting detector code) on a feature branch.
-2. Add labeled test cases to `testdata/eval/malicious/` (true positives) and `testdata/eval/benign/` (true negatives).
-3. Run `ghostcatcher eval -corpus testdata/eval` and confirm the F1 score does not regress below your CI floor.
-4. Open a PR. The CI workflow re-runs `ghostcatcher eval` with `-min-f1 0.85` and blocks merges on regression.
-5. After merge, sign the new rule pack and roll it out via configuration management.
-
-See **[Evaluation Harness](Evaluation-Harness)** for details on the harness.
+- **[Behavior Taxonomy](Behavior-Taxonomy)** — catalog and chains.
+- **[Detections](Detections)** — nano inventory.
+- **[Configuration](Configuration)** — pack / mapping paths.

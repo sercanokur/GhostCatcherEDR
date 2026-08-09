@@ -6,13 +6,16 @@ Day-2 procedures for running GhostCatcher in production. Each section is a self-
 
 - [ ] Distro and kernel version recorded; eBPF and YARA decisions made (see **[Build Tags](Build-Tags)**).
 - [ ] Binary installed at `/usr/local/bin/ghostcatcher` with the correct mode (`0755`, root-owned).
-- [ ] `selfguard.expected_sha256` pinned to the SHA-256 of the deployed binary.
+- [ ] `self_guard.expected_binary_sha256` pinned to the SHA-256 of the deployed binary.
 - [ ] Config under `/etc/ghostcatcher/` (`0640`, root-owned), validated with `ghostcatcher check-config`.
+- [ ] `mapping.yaml` installed next to the rule pack (`mapping_path` set) — schema 1.3 taxonomy + CHAIN-1…6.
+- [ ] `watched_units` / `fp_allowlist_units` tuned for this host’s web stack.
 - [ ] Rule pack signed; public key + signature path set in config.
 - [ ] At least one sink (typically TCP/TLS syslog or HEC) reachable from the host.
-- [ ] Baseline path on local disk with enough free space (the snapshot grows linearly with `document_roots`).
+- [ ] Baseline path on local disk with enough free space (prefer golden-image baseline — see **[Baselines](Baselines-and-Learning-Mode)**).
 - [ ] `systemd` unit installed with `Type=notify` + `WatchdogSec=` if you want self-guard restarts.
 - [ ] Operator on call has access to the secret used by `baseline_commit_token_env`.
+- [ ] SIEM parsers updated for schema 1.3 fields and any nano ID renames (**[Sinks and SIEM](Sinks-and-SIEM)**).
 
 ## First baseline
 

@@ -40,7 +40,8 @@ sudo install -m 0755 ghostcatcher /usr/local/bin/ghostcatcher
 sudo mkdir -p /etc/ghostcatcher /var/lib/ghostcatcher
 sudo cp configs/config.example.yaml      /etc/ghostcatcher/config.yaml
 sudo cp configs/rule_pack.example.yaml   /etc/ghostcatcher/rule_pack.yaml
-sudo chmod 0640 /etc/ghostcatcher/config.yaml /etc/ghostcatcher/rule_pack.yaml
+sudo cp configs/mapping.yaml             /etc/ghostcatcher/mapping.yaml
+sudo chmod 0640 /etc/ghostcatcher/config.yaml /etc/ghostcatcher/rule_pack.yaml /etc/ghostcatcher/mapping.yaml
 ```
 
 Edit `/etc/ghostcatcher/config.yaml` and at minimum set:
@@ -49,9 +50,13 @@ Edit `/etc/ghostcatcher/config.yaml` and at minimum set:
 |-----|-----|
 | `baseline_path` | e.g. `/var/lib/ghostcatcher/baseline.json` |
 | `rule_pack_path` | `/etc/ghostcatcher/rule_pack.yaml` |
+| `mapping_path` | `/etc/ghostcatcher/mapping.yaml` (Macro→Micro→Nano + CHAIN catalog) |
 | `document_roots` | actual web roots on this host (nginx `root`, Apache `DocumentRoot`) |
+| `watched_units` | systemd units for web workers (`nginx.service`, `php-fpm`, …) |
 | `require_root: true` | so the agent fails fast if launched without root |
 | One of the sink blocks | `syslog_udp`, `syslog_tcp`, `splunk_hec`, `elastic_bulk`, `loki_push` |
+
+Detection vocabulary: **[Behavior Taxonomy](Behavior-Taxonomy)** and [`bhv.md`](https://github.com/sercanokur/GhostCatcherEDR/blob/main/bhv.md).
 
 Full key reference is in **[Configuration](Configuration)**.
 

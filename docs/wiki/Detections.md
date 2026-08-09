@@ -80,4 +80,14 @@ Ordered, time-windowed, **same-anchor** chains (see `mapping.yaml` `chains:`):
 
 ## Anchor rule
 
-Process **names are never the primary anchor**. Prefer systemd unit / cgroup v2 path (`watched_units` in config). `TargetProcessNames` remains a fallback for hosts without readable cgroup metadata.
+Process **names are never the primary anchor**. Prefer systemd unit / cgroup v2 path (`watched_units` in config). `ld_preload_target_processes` remains a fallback for hosts without readable cgroup metadata.
+
+## Output format
+
+Events are schema **1.3** NDJSON. Required taxonomy fields after Orient:
+
+- `rule_id`, `macro`, `micro`, `src`, `type`, `anchor`, `conf_band`
+- Optional after chains: `chain_id`, `evidence_loss`
+- Doctrine: `kill_chain_phase`, `defense_layer`, `soc_escalate`, `response`
+
+Full example under **[Sinks and SIEM](Sinks-and-SIEM)**. Catalog source: [`configs/mapping.yaml`](https://github.com/sercanokur/GhostCatcherEDR/blob/main/configs/mapping.yaml). Narrative doctrine: **[Behavior Taxonomy](Behavior-Taxonomy)**.

@@ -6,10 +6,14 @@ Most production-grade EDRs are commercial, opaque, or both. GhostCatcher is an o
 
 ## How is this different from auditd or osquery?
 
-- **auditd** captures syscalls; you still need rules and a pipeline to turn them into actionable detections. GhostCatcher consumes auditd as one of its sensor backends.
-- **osquery** turns OS state into SQL. Excellent for fleet hunting; less focused on "is this host being attacked right now". GhostCatcher is opinionated about specific Linux attack patterns (web shells, persistence, fileless, reverse shells) and ships rules for them out of the box.
+- **auditd** captures syscalls; you still need rules and a pipeline to turn them into actionable detections. GhostCatcher consumes auditd as one of its sensor backends and maps them to bhv **nanos**.
+- **osquery** turns OS state into SQL. Excellent for fleet hunting; less focused on "is this host being attacked right now". GhostCatcher is opinionated about Ubuntu Macro→Micro→Nano behaviors (web RCE, persistence, privesc, concealment, credentials, container escape) and ships CHAIN-1…6 correlation on top.
 
 You can run all three together. They overlap on the data side, not on the detection side.
+
+## What is schema 1.3 / `mapping.yaml`?
+
+Schema **1.3** adds taxonomy fields (`macro`, `micro`, `src`, `type`, `anchor`, `conf_band`, `chain_id`, `evidence_loss`) to every event. `mapping.yaml` is the machine-readable catalog of every nano and the six correlation chains. See **[Behavior Taxonomy](Behavior-Taxonomy)**.
 
 ## Does it require an agent on every host?
 
@@ -80,12 +84,13 @@ Check the `LICENSE` file in the repository for the actual terms. The project's i
 
 ## I want to add a new detector. Where do I start?
 
-1. Create `internal/detect/<your-detector>/` with a `Scan(...) ([]event.Event, error)` function.
-2. Add a baseline field if your detector needs one (see `internal/baseline/baseline.go` and `BuildBaseline*` functions).
-3. Wire the call into `internal/runner/runner.go`'s scan loop.
-4. Add the corresponding rule entry to `configs/rule_pack.example.yaml`.
-5. Add positive + negative samples under `testdata/eval/` (and unit tests under your detector's package).
-6. Run `go test ./...` and `ghostcatcher eval` locally.
-7. Open a PR.
+1. Pick Macro/Micro and a **nano ID** in SCREAMING_SNAKE; add it to `configs/mapping.yaml` (and preferably `bhv.md`).
+2. Create `internal/detect/<pkg>/` with `Scan` and/or a live `Route*` for sensor kinds.
+3. Add baseline fields if needed (`internal/baseline`).
+4. Wire into `runner.RunOnce` and/or `consumeSensor`.
+5. Add scoring to `configs/lab_rule_pack.yaml` (and production pack if shipping).
+6. Prefer `watched_units` / cgroup **anchor** over process names.
+7. Add positive + negative tests; run `go test ./...` and `ghostcatcher eval`.
+8. Update **[Detections](Detections)** / wiki in the same PR.
 
-The smallest end-to-end PR you can study for shape is `internal/detect/ancestry/` — it has the same five concerns (config, baseline, scan, rule entry, test) in their minimal form.
+Study `internal/detect/ancestry/` for a small scan-only shape, or `internal/detect/credential/` for live `openat` routing.

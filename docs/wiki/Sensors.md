@@ -1,6 +1,8 @@
 # Sensors
 
-The realtime sensor is the agent's nervous system. It feeds exec, openat, connect, ptrace, init_module and memfd events into the engine in addition to the periodic scan loop. GhostCatcher does not commit to one backend — it picks the best available at startup using `sensor.Auto()`.
+The realtime sensor feeds syscall-shaped events into nano routers **in addition to** the periodic scan loop. GhostCatcher picks the best available backend at startup via `sensor.Auto()`.
+
+Emitted findings label `src` honestly: live auditd-backed events use `AUDIT`; `/proc` polls use `PROCSCAN`; eBPF becomes `EBPF-*` when decode is real (today the eBPF path may still be a stub — see Build Tags).
 
 ## Backend selection order
 
@@ -14,97 +16,84 @@ sensor.Auto()
    |
    v
 +-----------------------------+
-| 2. auditd tail              |  --- if /var/log/audit/audit.log readable, use it.
+| 2. auditd tail              |  --- if /var/log/audit/audit.log readable.
 +-----------------------------+
    |
    v
 +-----------------------------+
-| 3. /proc poll               |  --- last-resort fallback.
+| 3. /proc poll               |  --- last-resort fallback (exec-only).
 +-----------------------------+
-```
-
-The choice is logged at startup:
-
-```
-INFO sensor backend selected backend=ebpf
 ```
 
 ## eBPF backend (`with_ebpf`)
 
-- Implementation: [`internal/sensor/ebpf_linux.go`](https://github.com/sercanokur/GhostCatcherEDR/blob/main/internal/sensor/ebpf_linux.go) using `github.com/cilium/ebpf`.
-- Attaches tracepoints for:
-  - `sched/sched_process_exec`
-  - `syscalls/sys_enter_openat`
-  - `syscalls/sys_enter_connect`
-  - `syscalls/sys_enter_ptrace`
-  - `syscalls/sys_enter_init_module`
-  - `syscalls/sys_enter_memfd_create`
-- Requires:
-  - Linux kernel ≥ 5.8 with `CONFIG_BPF_SYSCALL=y`, `CONFIG_DEBUG_INFO_BTF=y` for CO-RE.
-  - `CAP_BPF` and `CAP_PERFMON` (or root).
-  - The binary built with `-tags with_ebpf`.
-- Produces lightweight `Event{Comm, Pid, Ppid, Argv, FilePath, RemoteAddr}` records consumed by the runner. The full enrichment (cgroup, ancestors, ioc) happens later in the pipeline.
-
-The eBPF code path is intentionally narrow: it keeps a per-CPU ringbuffer and never blocks. If the ringbuffer overruns, the agent logs a warning and continues; the periodic scan still catches what was missed.
+- Implementation: [`internal/sensor/ebpf_linux.go`](https://github.com/sercanokur/GhostCatcherEDR/blob/main/internal/sensor/ebpf_linux.go).
+- Intended kinds: exec, openat, connect, ptrace, init_module, memfd, listen, socket, splice.
+- Requires Linux ≥ 5.8, BPF capabilities, `-tags with_ebpf`.
+- Until ringbuf decode is complete, prefer auditd for production live fidelity; nanos still route through the same `sensor.Event` shape.
 
 ## auditd backend
 
 - Implementation: [`internal/sensor/auditd.go`](https://github.com/sercanokur/GhostCatcherEDR/blob/main/internal/sensor/auditd.go).
-- Tails `/var/log/audit/audit.log` (no libaudit dependency, no netlink socket — works behind read-only root filesystems and inside containers that mount the log read-only).
-- Parses `type=SYSCALL` records for `execve`, `openat`, `connect`, `ptrace`, `init_module`, `finit_module`, `memfd_create` and emits the same `Event` shape as the eBPF backend.
-- You should make sure `auditd` is actually configured to record the syscalls of interest. A minimal augment for `/etc/audit/rules.d/ghostcatcher.rules`:
+- Tails `/var/log/audit/audit.log` (no libaudit).
+- Parses `type=SYSCALL` for execve/execveat, openat, connect, ptrace, init_module/finit_module, memfd_create, listen, socket, splice.
+- Joins **PATH/CWD/name/exe** fields onto the event (`Path`, `Extra["path"]`, `Extra["cwd"]`) so M5 credential and M1 docroot nanos can see file paths.
+- Connect may decode AF_INET hex `addr=` into `RemoteIP` (IMDS detection).
 
-  ```
-  -a always,exit -F arch=b64 -S execve,execveat       -k gc_exec
-  -a always,exit -F arch=b64 -S openat                -k gc_open
-  -a always,exit -F arch=b64 -S connect               -k gc_net
-  -a always,exit -F arch=b64 -S ptrace                -k gc_ptrace
-  -a always,exit -F arch=b64 -S init_module,finit_module -k gc_kmod
-  -a always,exit -F arch=b64 -S memfd_create          -k gc_memfd
-  ```
+Minimal `/etc/audit/rules.d/ghostcatcher.rules`:
 
-  Reload with `augenrules --load`.
+```
+-a always,exit -F arch=b64 -S execve,execveat       -k gc_exec
+-a always,exit -F arch=b64 -S openat                -k gc_open
+-a always,exit -F arch=b64 -S connect               -k gc_net
+-a always,exit -F arch=b64 -S ptrace                -k gc_ptrace
+-a always,exit -F arch=b64 -S init_module,finit_module -k gc_kmod
+-a always,exit -F arch=b64 -S memfd_create          -k gc_memfd
+-a always,exit -F arch=b64 -S listen,socket,splice  -k gc_sock
+```
+
+Reload with `augenrules --load`.
 
 ## /proc poll backend
 
 - Implementation: [`internal/sensor/procpoll.go`](https://github.com/sercanokur/GhostCatcherEDR/blob/main/internal/sensor/procpoll.go).
-- Scans `/proc` every second for new PIDs, reads `comm`, `cmdline`, `ppid`, `cgroup`, and emits exec events for anything not seen on the previous tick.
-- Cannot see openat / connect / ptrace / init_module / memfd events. It is a strict last resort, used so the agent stays useful on hosts with no eBPF and no auditd.
-- Cost is low (`O(running_pids)` per second) but it will miss short-lived processes that exit between polls.
+- Emits synthetic **exec** events for new PIDs only.
+- Cannot see openat/connect/ptrace/memfd; periodic scanners cover at-rest state.
 
-## Per-event flow
+## Live nano routing
 
-```text
-sensor.Source.Events() ---> runner.consumeSensor goroutine
-                              |
-              +---------------+----------------+
-              |                                |
-   live high-fidelity kinds          emit via OODA pipeline
-   (ptrace, init_module,             directly
-    memfd_create, socket→copyfail,
-    exec→sudden_root credential seed)
-```
+`runner.consumeSensor` treats these kinds as fast-path:
 
-Additionally, when `sudden_root.enabled` is true, a dedicated **1s**
-`/proc` credential snapshot loop compares each process instance
-(`PID + starttime`) for non-root → root transitions and emits
-`PROC_SUDDEN_ROOT` (audit / `alert_only` by default).
+| Kind | Routers (examples) |
+|------|--------------------|
+| `exec` | sudden-root seed; `defense.RouteExec` (GTFOBins, AppArmor, firewall, snap, journal, tmpfs); `containeresc.RouteExec` |
+| `openat` | `credential.RouteOpenat`; `containeresc.RouteFile`; `web.RouteDocrootWrite` |
+| `connect` | `NETWORK_IMDS_ACCESS` when remote is link-local metadata |
+| `ptrace` | `PROC_PTRACE_INJECT`; optional cross-UID mem read |
+| `memfd_create` | `PROC_MEMFD_EXEC` |
+| `init_module` | `KERNEL_MODULE_LOAD` |
+| `socket` | copyfail AF_ALG (CVE-2026-31431) |
 
-## Tuning
+Additionally, when `sudden_root.enabled` is true, a ~1s `/proc` credential snapshot loop emits `PROC_SUDDEN_ROOT`.
 
-- **Disable the sensor entirely.** Set `sensor.disabled: true` in YAML. The periodic scanner remains active.
-- **Force a backend.** Set `sensor.backend: ebpf | audit | proc`. The agent fails closed if the requested backend cannot start (so production hosts do not silently fall back to a less capable backend).
-- **Backoff on noisy hosts.** `sensor.debounce_ms` controls how aggressively the consumer collapses bursts before triggering a `RunOnce`.
-- **Sudden-root load.** Only UID/EUID/`CapEff`/`exe` snapshots — not full maps or content hashes. Toggle with `sudden_root.enabled` / `sudden_root.snapshot_interval`.
+## FIM and inventory (not the live sensor)
+
+| Source | Mechanism | Typical nanos |
+|--------|-----------|---------------|
+| **FIM** | fsnotify → debounced `RunOnce` + hash deltas in persistence/fimextra/web | SSH drop-ins, cron, apt hooks, motd, profile, log truncate |
+| **INVENTORY** | Periodic dpkg verify / SUID / caps / web baseline | `LIB_HASH_MISMATCH`, `SUID_*`, `WEB_APP_FILE_TAMPER` |
+| **PROCSCAN** | Periodic `/proc` maps, net, ancestry, worker children | `PROC_RWX_*`, `PROC_SOCKET_STDIO`, `WEB_WORKER_*` |
+
+Sensitive path coverage (Ubuntu M2.4 surfaces included) is listed in [`internal/watch/sensitive.go`](https://github.com/sercanokur/GhostCatcherEDR/blob/main/internal/watch/sensitive.go).
 
 ## What the sensor cannot see
 
-- Userland-only events that never cross a syscall boundary (e.g. a Java app loading a class via reflection from an in-memory jar). Use the YARA memory scan or `/proc/maps` to compensate.
-- Events that occur in a separate user namespace where the agent has no view into `/proc`. Run the agent in the host PID/user namespace.
-- Encrypted network payloads — GhostCatcher classifies sockets, not bytes. Use a dedicated network sensor for content inspection.
+- Pure userland reflection with no syscall (compensate with YARA memory / maps).
+- Other user namespaces if the agent is not in the host PID namespace.
+- Encrypted payload contents — sockets are classified, not decrypted.
 
 ## Cross-references
 
-- **[Architecture](Architecture)** for the overall data flow.
-- **[Detections](Detections)** for the rules that consume sensor events.
-- **[Build Tags](Build-Tags)** for how to enable `with_ebpf`.
+- **[Behavior Taxonomy](Behavior-Taxonomy)** — how `src` maps to nanos.
+- **[Architecture](Architecture)** — pipeline placement.
+- **[Build Tags](Build-Tags)** — `with_ebpf`.

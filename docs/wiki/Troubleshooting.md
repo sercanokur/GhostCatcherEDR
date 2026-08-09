@@ -24,15 +24,17 @@ Common failure modes, what they look like, and how to fix them. Each entry follo
   Compare the public key hash on the host to the build host.
 - **Fix:** re-sign the pack with the matching key, or stage the new public key on the host before pushing the new signature.
 
-### `rule pack invalid` / `compile: unexpected token`
+### `mapping.yaml` missing / taxonomy fields empty
 
-- **Symptom:** `check-config` exits non-zero.
-- **Diagnose:** the failing rule's `expr` is malformed. The error includes the offending token. Common culprits: unquoted strings, missing parens around `or` expressions, using `matches` without a regex argument.
-- **Fix:** see the grammar in **[Rule Pack](Rule-Pack)** and unit-test the expression with the snippet:
+- **Symptom:** Events lack `macro` / `micro` / `conf_band`.
+- **Diagnose:** Check startup logs for `bhv mapping load failed`. Confirm `mapping_path` or that `configs/mapping.yaml` is resolvable from the process cwd.
+- **Fix:** Install `mapping.yaml` next to the rule pack and set `mapping_path` explicitly in config.
 
-  ```bash
-  go test ./internal/rules -run TestExpr
-  ```
+### SIEM still alerts on old rule IDs
+
+- **Symptom:** Dashboards looking for `NETWORK_REVERSE_SHELL` / `SENSOR_MEMFD_CREATE` go silent after upgrade.
+- **Diagnose:** Compare against the rename table in **[Sinks and SIEM](Sinks-and-SIEM)**.
+- **Fix:** Update saved searches to current nano IDs (`PROC_SOCKET_STDIO`, `PROC_MEMFD_EXEC`, …).
 
 ### `config invalid: baseline_path not writable`
 
@@ -75,17 +77,17 @@ Common failure modes, what they look like, and how to fix them. Each entry follo
 
 ## Detection noise
 
-### Burst of `WEB_FILE_NEW` after a deploy
+### Burst of `WEB_APP_FILE_TAMPER` / web shell alerts after a deploy
 
-- **Symptom:** thousands of `WEB_FILE_NEW` events the moment a new release goes out.
-- **Diagnose:** the deploy created or replaced files under `document_roots` that are not in the baseline.
-- **Fix:** rotate the baseline as part of the deploy pipeline (see **[Operations Runbook](Operations-Runbook)** → "Rotating the baseline"). Add CI/CD-generated cache prefixes to `path_allowlist_prefixes`.
+- **Symptom:** thousands of web-related events the moment a new release goes out.
+- **Diagnose:** Deploy rewrote many files under `document_roots` vs baseline.
+- **Fix:** Rotate the baseline as part of the deploy pipeline (see **[Operations Runbook](Operations-Runbook)**). Add CI/CD cache prefixes to `path_allowlist_prefixes`. Prefer golden-image baselines over post-compromise learning.
 
-### `MAPS_RWX` constantly firing for a JIT (Java, .NET, V8)
+### `PROC_RWX_MEMORY_SEGMENT` constantly firing for a JIT (Java, .NET, V8)
 
 - **Symptom:** repeated alerts on an interpreter that legitimately allocates RWX.
-- **Diagnose:** check `evidence.path` of the offending event.
-- **Fix:** add the path prefix to `maps_path_allowlist_prefixes`. If the JIT only writes-then-execs (W^X), narrow `maps_watch_processes` to exclude its `comm`.
+- **Diagnose:** check `evidence` / map path of the offending event.
+- **Fix:** add the path prefix to `maps_path_allowlist_prefixes`. If the JIT only writes-then-execs (W^X), narrow `maps_watch_processes` to exclude its `comm`. Allowlist by systemd unit via `fp_allowlist_units` when the noise is unit-scoped.
 
 ### `PROC_RARE_ANCESTRY` fires for a known cron job
 

@@ -2,7 +2,9 @@
 
 `ghostcatcher eval` is the agent's built-in detection-quality harness. It runs the real detection code over a labeled corpus on disk and reports precision, recall, and F1. CI uses it as a regression gate so a rule pack change that improves recall while quietly destroying precision (or vice versa) cannot merge.
 
-Implementation: [`internal/eval`](https://github.com/sercanokur/GhostCatcherEDR/tree/main/internal/eval) and [`cmd/agent/main.go`](https://github.com/sercanokur/GhostCatcherEDR/blob/main/cmd/agent/main.go) → `evalCmd`.
+bhv §9.4 asks for at least one **positive** and one **negative** test per nano. Extend `testdata/eval/` as you add nanos from [`configs/mapping.yaml`](https://github.com/sercanokur/GhostCatcherEDR/blob/main/configs/mapping.yaml). Web-shell cases must satisfy the **exec primitive + input channel** rule (obfuscation alone must not alert).
+
+Implementation: [`internal/eval`](https://github.com/sercanokur/GhostCatcherEDR/tree/main/internal/eval) and [`cmd/agent`](https://github.com/sercanokur/GhostCatcherEDR/blob/main/cmd/agent/main.go) → `eval` subcommand.
 
 ## Corpus layout
 
@@ -70,7 +72,7 @@ echo "exit: $?"     # 0 if F1 >= 0.85, 1 otherwise
 
 1. Loads the default config but forces `LearningMode=false`, `FirstRunAllowAlerts=true`, `MinConfidenceAlert=60` so every detector behaves as if it were running in production with no baseline.
 2. For the web corpus: sets `DocumentRoots = [malicious_dir]`, calls `web.Scan` once, collects every emitted file path into a hit set; repeats with `[benign_dir]`.
-3. For the cron corpus: parses each line through `persistence.EvalCronLine` (a thin wrapper exposed for the harness), and counts whether it produced a `CRON_RISK_LINE`-class event.
+3. For the cron corpus: parses each line through the persistence cron evaluator and counts whether it produced a `CRON_HIGH_RISK`-class event.
 4. Aggregates TP / FP / FN / TN across both corpora and computes:
 
    ```

@@ -10,17 +10,16 @@ A baseline is a JSON snapshot at `baseline_path` (typically `/var/lib/ghostcatch
 
 | Field | Source | Used by |
 |-------|--------|---------|
-| `web_files{}` | hash + size + mtime + owner of every file under `document_roots` matching the configured extensions | web shell scanner (`WEB_FILE_NEW`, `WEB_FILE_HASH_DRIFT`) |
-| `authorized_keys{}` | per-user fingerprints from `~/.ssh/authorized_keys` | `SSH_KEY_NEW` |
-| `cron_lines[]` | normalized lines from `/etc/crontab`, `/etc/cron.*/`, `/var/spool/cron/*`, `/var/spool/atjobs` | `CRON_FILE_NEW`, `CRON_RISK_LINE` |
-| `ld_preload[]` | values from `/etc/ld.so.preload` and `/proc/*/environ` for watched comms | `LD_PRELOAD_NEW`, `LD_PRELOAD_FILE` |
-| `persistence_files{}` | hash of every file under shellrc, pam, sudoers, sshd_config, systemd, modprobe paths | all `*_DRIFT` rules |
-| `loaded_kernel_modules[]` | `/proc/modules` snapshot | `KMOD_LOADED_NEW` |
-| `suid_inventory{}` | path + hash of every SUID/SGID binary under `suid_watch_dirs` | `SUID_NEW`, `SUID_HASH_DRIFT` |
-| `file_capabilities{}` | `security.capability` xattr per file under `caps_watch_dirs` | `CAPS_DRIFT` |
-| `process_ancestry{}` | observed `(parent_comm, child_comm)` pairs at commit time | `PROC_RARE_ANCESTRY` |
-| `loaded_libraries{}` | per-`comm` set of `.so` paths from `/proc/*/maps` | `MAPS_SO_NEW` |
-| `network_listeners{}` | `comm:port:proto` triples at commit time | `NET_LISTEN_NEW` |
+| `web_files{}` | hash + mtime of files under `document_roots` | `WEB_SHELL_PATTERN`, `WEB_APP_FILE_TAMPER`, `WEB_UPLOAD_DIR_EXEC` |
+| `authorized_keys{}` | per-user fingerprints from `~/.ssh/authorized_keys` | `SSH_AUTHKEY_NEW`, `SSH_AUTHKEY_INVALID_LINE` |
+| `cron_lines[]` | normalized lines from crontab / cron.d / spool | `CRON_HIGH_RISK`, `CRON_SPOOL_CHANGE`, `CRON_DROPIN_NEW` |
+| `ld_preload[]` | `/etc/ld.so.preload` and watched process environ | `LD_SO_PRELOAD_FILE`, `PROC_LD_PRELOAD_ENV` |
+| `persistence_files{}` | hashes for shellrc/profile, pam, sudoers, sshd, systemd, apt hooks, … | M2 FIM nanos (`PROFILE_HOOK`, `PAM_PERSISTENCE`, `SYSTEMD_PERSISTENCE`, fimextra, …) |
+| `loaded_kernel_modules[]` | `/proc/modules` snapshot | `KERNEL_MODULE_NEW` / `KERNEL_MODULE_LOAD` |
+| `suid_inventory{}` | path + hash of SUID/SGID binaries | `SUID_INVENTORY_DELTA`, `SUID_UNPACKAGED`, `SUID_IN_WRITABLE_PATH` |
+| `file_capabilities{}` | `security.capability` xattrs | `FILE_CAPABILITY_DELTA` |
+| `process_ancestry[]` | observed `(parent_comm, child_comm)` pairs | `PROC_RARE_ANCESTRY` |
+| `loaded_libraries{}` | per-`comm` `.so` paths from `/proc/*/maps` | `PROC_MAPPED_UNPACKAGED_LIB` |
 | `committed_at` | UTC timestamp of the commit | logging / forensics |
 
 The on-disk format is a single JSON object that is `0600` and owned by root. Avoid storing it on a network share — keep it on local disk so an attacker with read access to a file server cannot use it as recon.
@@ -55,7 +54,7 @@ The on-disk format is a single JSON object that is `0600` and owned by root. Avo
                 +--------------------+
 ```
 
-After a commit, every subsequent run is a **delta** against that snapshot. A new file in `document_roots` becomes `WEB_FILE_NEW`; a new SUID binary becomes `SUID_NEW`; a new `(nginx, sh)` ancestry becomes `PROC_RARE_ANCESTRY`. Rotating the baseline acknowledges all current state as known good, so do not commit during incident response.
+After a commit, every subsequent run is a **delta** against that snapshot. A new interpretable file under an upload dir becomes `WEB_UPLOAD_DIR_EXEC`; a new unpackaged SUID binary becomes `SUID_UNPACKAGED`; a new `(nginx, sh)` ancestry becomes `PROC_RARE_ANCESTRY`. Rotating the baseline acknowledges all current state as known good, so do not commit during incident response.
 
 ## Learning mode
 

@@ -1,193 +1,130 @@
 # Configuration
 
-The agent reads a single YAML file (default `configs/config.example.yaml`, production target `/etc/ghostcatcher/config.yaml`). Every key is optional unless marked **required**; sensible defaults live in `internal/config/config.go`. Run `ghostcatcher check-config -config <path>` before restarting the service to validate.
+The agent reads a single YAML file (default `configs/config.example.yaml`, production `/etc/ghostcatcher/config.yaml`). Defaults live in `internal/config/config.go`. Validate with `ghostcatcher check-config -config <path>`.
 
-## Top-level keys
-
-### Core
+## Core
 
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
-| `scan_interval` | duration | `5m` | Period of the full scan loop. |
-| `baseline_path` | path | **required** | Where the JSON snapshot lives. |
-| `rule_pack_path` | path | **required** | YAML rule pack. |
-| `min_confidence_for_alert` | int | `70` | Events under this become `learning_only`. |
-| `learning_mode` | bool | `false` | Force every event to `learning_only`, regardless of confidence. |
-| `first_run_allow_alerts` | bool | `false` | Allow alerts before the first `baseline commit`. |
-| `require_root` | bool | `true` | Exit non-zero if not running as UID 0. |
-| `agent_log_level` | string | `info` | `debug` / `info` / `warn` / `error`. |
+| `scan_interval` | duration | `5m` | Full scan loop period. |
+| `baseline_path` | path | **required** | JSON snapshot path. |
+| `rule_pack_path` | path | **required** | Scoring rule pack YAML. |
+| `mapping_path` | path | auto | bhv catalog (`configs/mapping.yaml`). Empty → resolve relative candidates. |
+| `state_dir` | path | `/var/lib/ghostcatcher` | Agent state. |
+| `min_confidence_for_alert` | int | `70` | Below → `learning_only`. |
+| `learning_mode` | bool | `false` | Force every event `learning_only`. |
+| `first_run_allow_alerts` | bool | `false` | Allow alerts before first baseline commit. |
+| `require_root` | bool | `false` in example | Exit if not UID 0 when true. |
 
-### Web detection
-
-| Key | Type | Default | Notes |
-|-----|------|---------|-------|
-| `document_roots` | []path | `[]` | Web roots to walk. |
-| `web_extensions` | []string | shipped list | Override the default extension set if needed. |
-| `web_recon_child_scan_enabled` | bool | `true` | Recon children under web workers. |
-| `path_allowlist_prefixes` | []path | `[]` | Skip paths matching these prefixes in web scanning. |
-
-### `LD_PRELOAD`
+## Behavior taxonomy / anchors
 
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
-| `ld_preload_watch_processes` | []string | shipped list | Process `comm`s whose `environ` is sampled. |
-| `ld_preload_allowlist` | []string | `[]` | Path fragments to ignore. |
+| `watched_units` | []string | php-fpm / nginx / apache2 / … | Primary **web worker anchors** (unit name or prefix). |
+| `fp_allowlist_units` | []string | apt/snap/cloud-init/logrotate/… | Benign units that should not escalate FIM noise (bhv §8). |
+| `ld_preload_target_processes` | []string | nginx, apache2, … | Fallback process `comm` list when cgroup unit is unavailable. |
 
-### `/proc/maps`
-
-| Key | Type | Default | Notes |
-|-----|------|---------|-------|
-| `maps_scan_enabled` | bool | `true` | Enable RWX/`(deleted)`/TracerPid checks. |
-| `maps_watch_processes` | []string | shipped list | `comm`s whose `/proc/maps` is read. |
-| `maps_path_allowlist_prefixes` | []path | shipped list | Quiet known-good paths. |
-
-### Integrity
+## Web detection
 
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
-| `integrity_verify_enabled` | bool | `true` | Auto-dispatches dpkg vs rpm via `/etc/os-release`. |
-| `integrity_paths` | []path | shipped list | Files to verify (`/usr/bin/ls`, `/bin/ps`, …). |
-| `suid_watch_dirs` | []path | shipped list | Where to walk for SUID/SGID drift. |
-| `caps_watch_dirs` | []path | shipped list | Where to read `security.capability` xattrs. |
+| `document_roots` | []path | `[]` | Docroots for shells / upload / tamper. |
+| `web_recent_change_days` | int | `14` | Recent-mtime window. |
+| `web_recon_child_scan_enabled` | bool | `true` | M1.2 worker children (recon/shell/interp/downloader/pty). |
+| `path_allowlist_prefixes` | []path | `[]` | Skip prefixes in web walks. |
 
-### Persistence + watchers
-
-| Key | Type | Default | Notes |
-|-----|------|---------|-------|
-| `watch_authorized_keys` | bool | `true` | Master switch for fsnotify. |
-| `cron_watch_paths` | []path | shipped list | Add custom cron locations. |
-| `systemd_watch_paths` | []path | shipped list | Custom systemd unit dirs. |
-| `pam_watch_paths` | []path | shipped list | |
-| `sudoers_watch_paths` | []path | shipped list | |
-| `sshd_config_watch_paths` | []path | shipped list | |
-| `kmod_watch_paths` | []path | shipped list | |
-
-### Process ancestry
+## LD_PRELOAD / maps / integrity
 
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
-| `ancestry_scan_enabled` | bool | `true` | Emits `PROC_RARE_ANCESTRY`. |
-| `ancestry_juicy_parents` | []string | shipped list | Override the parent set. |
-| `ancestry_child_set` | []string | shipped list | Override the child set. |
+| `ld_preload_allowlist` | []string | `[]` | Benign preload paths. |
+| `maps_scan_enabled` | bool | `false` | RWX / deleted / tracer / masquerade scans. |
+| `maps_watch_processes` | []string | nginx, apache2, … | `comm`s to inspect. |
+| `maps_path_allowlist_prefixes` | []path | `[]` | Quiet known-good map paths. |
+| `integrity_verify_enabled` | bool | `false` | dpkg/rpm hash verify + SUID/caps. |
+| `integrity_paths` | []path | shipped | Critical binaries to verify. |
 
-### Sudden root
-
-| Key | Type | Default | Notes |
-|-----|------|---------|-------|
-| `sudden_root.enabled` | bool | `true` | Behavior-only non-root → root credential transitions (`PROC_SUDDEN_ROOT`). |
-| `sudden_root.snapshot_interval` | duration | `1s` | Lightweight `/proc` UID/EUID/`CapEff` poll (independent of `scan_interval`). |
-| `sudden_root.allowed_exe_basenames` | []string | `[]` | Extra helpers merged with built-in `sudo`/`su`/`pkexec`/… allowlist. |
-| `sudden_root.allowed_ancestor_comms` | []string | `[]` | Extra ancestor `comm`s treated as legitimate privilege brokers. |
-
-Cross-user `/proc` visibility requires a privileged agent. The rule pack response is `alert_only` by default (audit, no kill).
-
-### Network
+## Watchers
 
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
-| `network_scan_enabled` | bool | `true` | |
-| `network_allow_cidrs` | []cidr | `[127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, ::1/128, fc00::/7]` | Treat as internal. |
-| `network_listen_baseline_required` | bool | `true` | If false, every listen is logged as informational. |
+| `watch_authorized_keys` | bool | `false` | Dedicated authkeys watcher. |
+| `watch_debounce` | duration | `800ms` | fsnotify coalesce. |
+| `watch_sensitive_paths` | bool | `true` | Broad FIM path set (SSH, cron, systemd, apt, motd, udev, …). |
 
-### YARA (only honored with `with_yara` build)
-
-| Key | Type | Default | Notes |
-|-----|------|---------|-------|
-| `yara_rules_dir` | path | `""` | Directory of `*.yar` / `*.yara`. |
-| `yara_memory_enabled` | bool | `false` | Scan live process memory in addition to disk. |
-| `yara_memory_processes` | []string | shipped list | `comm`s to memory-scan. |
-
-### IOC feeds
+## Network / ancestry / YARA / IOC
 
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
-| `ioc_feed_dir` | path | `""` | Directory layout: `hash/`, `ip/`, `cidr/`, `domain/`. One indicator per line, `#` comments allowed. |
-| `ioc_refresh_interval` | duration | `15m` | How often to re-read the directory. |
-| `ioc_hash_boost` | int | `10` | Confidence delta on hash hit. |
-| `ioc_network_boost` | int | `25` | Confidence delta on IP/CIDR/domain hit. |
+| `network_scan_enabled` | bool | `true` | `/proc/net` × fd correlation. |
+| `network_ip_cidr_allowlist` | []cidr | RFC1918 + localhost | Treat as internal. |
+| `ancestry_scan_enabled` | bool | `true` | `PROC_RARE_ANCESTRY`. |
+| `yara_rules_dir` | path | `""` | Only with `-tags with_yara`. |
+| `yara_memory_enabled` | bool | `false` | Process memory scan. |
+| `ioc_hash_files` / `ioc_ip_files` / `ioc_domain_files` | []path | `[]` | One indicator per line. |
 
-### Sensor
-
-| Key | Type | Default | Notes |
-|-----|------|---------|-------|
-| `sensor.disabled` | bool | `false` | Periodic scan only. |
-| `sensor.backend` | enum | `auto` | `auto` / `ebpf` / `audit` / `proc`. |
-| `sensor.debounce_ms` | int | `500` | Coalesce sensor bursts before triggering rescans. |
-
-### Rate limit + spool
+## Sudden root / copy-fail / respond
 
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
-| `rate_limit_per_rule_per_min` | int | `60` | Drops in excess emit a single `RATE_LIMITED` event per window. |
-| `spool_dir` | path | `/var/spool/ghostcatcher` | Where unsent events queue. |
-| `spool_max_bytes` | int | `104857600` | Rotates the active file at this size. |
+| `sudden_root.enabled` | bool | `true` | `PROC_SUDDEN_ROOT`. |
+| `sudden_root.snapshot_interval` | duration | `1s` | Credential poll. |
+| `sudden_root.allowed_exe_basenames` | []string | `[]` | Extra allowlist. |
+| `copy_fail.enabled` | bool | `true` | CVE-2026-31431. |
+| `copy_fail.page_cache_check_enabled` | bool | `true` | Periodic page-cache drift. |
+| `respond.enabled` | bool | `true` | OODA Act engine. |
+| `respond.mode` | string | `audit` | `audit` \| `enforce`. |
+| `respond.min_confidence` / `min_severity` | | | Gates for Act. |
+| `respond.allow_quarantine` / `allow_kill_process` / `allow_isolate_host` | bool | | Per-action allow. |
+| `respond.protected_comms` / `protected_pids` | | | Safety rails. |
+| `respond.kill_switch` | bool | `false` | Disable all Act. |
 
-### Quarantine
-
-| Key | Type | Default | Notes |
-|-----|------|---------|-------|
-| `quarantine_dir` | path | `""` (disabled) | Vault root. |
-| `quarantine_min_confidence` | int | `85` | Only file-based events above this are stored. |
-| `quarantine_max_bytes_per_artifact` | int | `33554432` | Skip oversized files. |
-
-### Self-guard
-
-| Key | Type | Default | Notes |
-|-----|------|---------|-------|
-| `selfguard.binary_path` | path | `""` | Absolute path to the running agent binary. |
-| `selfguard.expected_sha256` | string | `""` | Hex digest. Mismatch emits `AGENT_TAMPERED`. |
-| `selfguard.check_interval` | duration | `5m` | |
-| `selfguard.systemd_watchdog` | bool | `true` | Emit `WATCHDOG=1` if `NOTIFY_SOCKET` is set. |
-
-### Baseline 2FA
+## Rate limit / spool / quarantine / self-guard
 
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
-| `baseline_commit_token_env` | string | `""` | Env var holding the secret. `baseline commit -token <value>` must match. |
+| `rate_limit_per_rule_per_min` | int | `120` | Per `rule_id`. |
+| `spool_dir` | path | `/var/lib/ghostcatcher/spool` | Unsent NDJSON. |
+| `spool_max_bytes` | int64 | 64 MiB | Rotate cap. |
+| `quarantine_dir` | path | `""` | Empty disables vault. |
+| `quarantine_min_confidence` | int | | Gate for copy. |
+| `self_guard.enabled` | bool | | Binary hash + watchdog. |
+| `self_guard.binary_path` / `expected_binary_sha256` | | | Mismatch → `AGENT_TAMPERED`. |
+| `baseline_commit_token_env` | string | `""` | Optional 2FA for `baseline commit`. |
+| `rule_pack_pubkey_file` / `rule_pack_signature_file` | path | | ed25519 fail-closed verify. |
+| `sigma_lite_dir` | path | `""` | Extra Sigma-lite drop-ins. |
 
-### Rule pack signing
+## Sinks
 
-| Key | Type | Default | Notes |
-|-----|------|---------|-------|
-| `rule_pack_pubkey_file` | path | `""` | Base64 ed25519 public key. |
-| `rule_pack_signature_file` | path | `""` | Detached signature over `rule_pack_path`. |
-| `sigma_lite_dir` | path | `""` | Sigma YAML drop-ins merged after the signed pack. |
+See **[Sinks and SIEM](Sinks-and-SIEM)**. Blocks: `syslog_udp`, `syslog_tcp`, `splunk_hec`, `elastic_bulk`, `loki_push`.
 
-### Sinks
+## Lab vs production packs
 
-See **[Sinks and SIEM](Sinks-and-SIEM)** for full transport details. The blocks are:
+```yaml
+# Lab / full catalog scoring
+rule_pack_path: /etc/ghostcatcher/lab_rule_pack.yaml
+mapping_path: /etc/ghostcatcher/mapping.yaml
 
-- `syslog_udp:` — UDP RFC5424 / RFC3164.
-- `syslog_tcp:` — TCP, optional TLS, RFC5425 octet-counted.
-- `splunk_hec:` — Splunk HTTP Event Collector.
-- `elastic_bulk:` — Elasticsearch `_bulk`.
-- `loki_push:` — Grafana Loki push API.
+# Production subset
+rule_pack_path: /etc/ghostcatcher/rule_pack.yaml
+mapping_path: /etc/ghostcatcher/mapping.yaml
+```
 
-Each block has `enabled: true|false` and transport-specific fields documented in **[Sinks and SIEM](Sinks-and-SIEM)**.
+Always ship `mapping.yaml` so events get macro/micro/`conf_band` even when the pack is a subset.
 
-## Validation
-
-`ghostcatcher check-config` runs:
-
-1. YAML parse.
-2. Required-field check (`baseline_path`, `rule_pack_path`, at least one sink **or** stdout-only).
-3. Path existence for files referenced (rule pack, signature, pubkey, baseline directory writable).
-4. Rule pack load (compiles every `expr`).
-5. Sigma-lite directory load (warns on unsupported subset).
-
-Non-zero exit on any failure — wire this into your config-management pipeline so a bad change cannot reach a host without being caught first.
-
-## Examples
-
-The shipped `configs/config.example.yaml` has every key with a comment. For a minimal lab config:
+## Minimal example
 
 ```yaml
 scan_interval: 1m
 baseline_path: /var/lib/ghostcatcher/baseline.json
 rule_pack_path: /etc/ghostcatcher/rule_pack.yaml
+mapping_path: /etc/ghostcatcher/mapping.yaml
 require_root: true
 document_roots:
   - /var/www/html
+watched_units:
+  - nginx.service
+  - php-fpm
 syslog_udp:
   enabled: true
   host: 127.0.0.1
@@ -197,4 +134,4 @@ syslog_udp:
   app_name: ghostcatcher
 ```
 
-For a hardened production config see **[Operations Runbook](Operations-Runbook)**.
+Full annotated file: [`configs/config.example.yaml`](https://github.com/sercanokur/GhostCatcherEDR/blob/main/configs/config.example.yaml).
