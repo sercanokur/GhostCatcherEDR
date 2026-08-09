@@ -70,15 +70,15 @@ func (v *Vault) Store(path string, e *event.Event) (string, error) {
 		return "", err
 	}
 	side := map[string]interface{}{
-		"path":        path,
-		"sha256":      sum,
-		"size":        fi.Size(),
-		"mtime":       fi.ModTime().UTC().Format(time.RFC3339Nano),
-		"mode":        fi.Mode().String(),
-		"stored_at":   time.Now().UTC().Format(time.RFC3339Nano),
-		"rule_id":     e.RuleID,
-		"confidence":  e.Confidence,
-		"signals":     e.Signals,
+		"path":       path,
+		"sha256":     sum,
+		"size":       fi.Size(),
+		"mtime":      fi.ModTime().UTC().Format(time.RFC3339Nano),
+		"mode":       fi.Mode().String(),
+		"stored_at":  time.Now().UTC().Format(time.RFC3339Nano),
+		"rule_id":    e.RuleID,
+		"confidence": e.Confidence,
+		"signals":    e.Signals,
 	}
 	jb, _ := json.MarshalIndent(side, "", "  ")
 	_ = os.WriteFile(filepath.Join(v.dir, day, sum+".json"), jb, 0o400)

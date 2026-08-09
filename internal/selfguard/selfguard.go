@@ -1,11 +1,11 @@
 // Package selfguard hardens the agent against in-place tampering.
 // Two checks run on every scan interval:
 //
-//   1. BinaryHash: sha256 of the configured binary matches the value
-//      captured at install time. Mismatch emits a critical event.
-//   2. SystemdWatchdog: if the agent was launched under systemd with
-//      WatchdogSec set, we notify "WATCHDOG=1" so systemd restarts us
-//      on hang.
+//  1. BinaryHash: sha256 of the configured binary matches the value
+//     captured at install time. Mismatch emits a critical event.
+//  2. SystemdWatchdog: if the agent was launched under systemd with
+//     WatchdogSec set, we notify "WATCHDOG=1" so systemd restarts us
+//     on hang.
 package selfguard
 
 import (
@@ -44,9 +44,9 @@ func BinaryMatches(path, expected string) error {
 }
 
 type MismatchError struct {
-	Path     string
-	Got      string
-	Want     string
+	Path string
+	Got  string
+	Want string
 }
 
 func (e *MismatchError) Error() string {

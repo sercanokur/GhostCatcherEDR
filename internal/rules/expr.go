@@ -16,25 +16,27 @@ import (
 //
 // Supported grammar (left to right, precedence as shown):
 //
-//   primary    := literal | ident | "(" expr ")"
-//   literal    := number | string | list
-//   string     := '"' (\\" | [^"])* '"'
-//   list       := "[" expr ("," expr)* "]"
-//   call       := ident "(" [expr ("," expr)*] ")"
-//   unary      := ["not"] primary
-//   cmp        := unary (("==" | "!=" | "<=" | ">=" | "<" | ">" | "contains" | "matches" | "in") unary)?
-//   conj       := cmp ("and" cmp)*
-//   disj       := conj ("or" conj)*
-//   expr       := disj
+//	primary    := literal | ident | "(" expr ")"
+//	literal    := number | string | list
+//	string     := '"' (\\" | [^"])* '"'
+//	list       := "[" expr ("," expr)* "]"
+//	call       := ident "(" [expr ("," expr)*] ")"
+//	unary      := ["not"] primary
+//	cmp        := unary (("==" | "!=" | "<=" | ">=" | "<" | ">" | "contains" | "matches" | "in") unary)?
+//	conj       := cmp ("and" cmp)*
+//	disj       := conj ("or" conj)*
+//	expr       := disj
 //
 // Supported identifiers (facts):
-//   rule_id, tactic, confidence, severity, kill_chain_phase, entity_path,
-//   entity_id, comm, uid, euid, signals (list of strings), techniques (list
-//   of strings), container_runtime.
+//
+//	rule_id, tactic, confidence, severity, kill_chain_phase, entity_path,
+//	entity_id, comm, uid, euid, signals (list of strings), techniques (list
+//	of strings), container_runtime.
 //
 // Supported functions:
-//   signal("X")   ~ "X" in signals
-//   matches("re") ~ applied to left-hand side as regex
+//
+//	signal("X")   ~ "X" in signals
+//	matches("re") ~ applied to left-hand side as regex
 //
 // Any parse/eval error is surfaced to the caller; a false eval on an
 // unknown identifier is treated as an error to keep misspelled rules
@@ -175,8 +177,8 @@ func (i identNode) eval(f EventFacts) (any, error) {
 }
 
 type binOpNode struct {
-	op       string
-	a, b     node
+	op   string
+	a, b node
 }
 
 func (bn binOpNode) eval(f EventFacts) (any, error) {

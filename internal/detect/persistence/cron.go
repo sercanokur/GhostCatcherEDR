@@ -59,7 +59,7 @@ var cronRiskTokens = []string{
 }
 
 // argLikeRE strips quotes and balanced whitespace for a rough shell lex that
-// normalizes `'ba''sh'` and `"b"ase"6"4` into `bash` / `base64` before token
+// normalizes `'ba”sh'` and `"b"ase"6"4` into `bash` / `base64` before token
 // substring matching runs.
 var argLikeRE = regexp.MustCompile(`['"]`)
 

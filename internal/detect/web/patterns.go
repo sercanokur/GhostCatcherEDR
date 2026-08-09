@@ -138,4 +138,3 @@ func classifyPatternCategories(matched []string) (execPrim, input, obfusc bool) 
 	}
 	return
 }
-

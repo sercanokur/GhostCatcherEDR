@@ -14,13 +14,13 @@ func testPack() *rules.Pack {
 		Version: "test",
 		Rules: []rules.Rule{
 			{
-				ID:          RuleSuddenRoot,
-				Techniques:  []string{"T1068"},
-				Tactic:      "privilege-escalation",
-				MinSignals:  1,
-				BaseScore:   80,
-				PerSignal:   3,
-				CapScore:    100,
+				ID:         RuleSuddenRoot,
+				Techniques: []string{"T1068"},
+				Tactic:     "privilege-escalation",
+				MinSignals: 1,
+				BaseScore:  80,
+				PerSignal:  3,
+				CapScore:   100,
 			},
 		},
 	}
@@ -79,10 +79,10 @@ func TestBuildEvent_AllowsSudo(t *testing.T) {
 	cfg := config.Default()
 	cfg.SuddenRoot.Enabled = true
 	tr := &Transition{
-		Key:  ProcessKey{PID: 10, StartTime: 1},
-		Kind: "euid_root",
-		Prev: CredState{UID: 1000, EUID: 1000, Comm: "sudo", Exe: "/usr/bin/sudo"},
-		Curr: CredState{UID: 1000, EUID: 0, Comm: "sudo", Exe: "/usr/bin/sudo"},
+		Key:    ProcessKey{PID: 10, StartTime: 1},
+		Kind:   "euid_root",
+		Prev:   CredState{UID: 1000, EUID: 1000, Comm: "sudo", Exe: "/usr/bin/sudo"},
+		Curr:   CredState{UID: 1000, EUID: 0, Comm: "sudo", Exe: "/usr/bin/sudo"},
 		SeenAt: time.Now().UTC(),
 	}
 	if _, hit := buildEvent(cfg, testPack(), "test", tr); hit {
@@ -94,10 +94,10 @@ func TestBuildEvent_FlagsTempExe(t *testing.T) {
 	cfg := config.Default()
 	cfg.SuddenRoot.Enabled = true
 	tr := &Transition{
-		Key:  ProcessKey{PID: 11, StartTime: 1},
-		Kind: "euid_root",
-		Prev: CredState{UID: 1000, EUID: 1000, Comm: "pwn", Exe: "/tmp/pwn"},
-		Curr: CredState{UID: 1000, EUID: 0, Comm: "pwn", Exe: "/tmp/pwn", CapEff: "000001ffffffffff", Container: "docker"},
+		Key:    ProcessKey{PID: 11, StartTime: 1},
+		Kind:   "euid_root",
+		Prev:   CredState{UID: 1000, EUID: 1000, Comm: "pwn", Exe: "/tmp/pwn"},
+		Curr:   CredState{UID: 1000, EUID: 0, Comm: "pwn", Exe: "/tmp/pwn", CapEff: "000001ffffffffff", Container: "docker"},
 		SeenAt: time.Now().UTC(),
 	}
 	ev, hit := buildEvent(cfg, testPack(), "test", tr)

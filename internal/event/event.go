@@ -10,11 +10,11 @@ import (
 
 // SchemaVersion bumps whenever the top-level event JSON shape changes.
 //
-//   1.0  - initial shape (rule_id, entity, signals, evidence).
-//   1.1  - added process/file/network/container sub-documents and
-//          correlation_id for cross-event correlation in SIEMs.
-//   1.2  - kill_chain_phase, defense_layer, soc_escalate, response (OODA Act).
-//   1.3  - bhv.md taxonomy: macro, micro, src, type, anchor, conf_band.
+//	1.0  - initial shape (rule_id, entity, signals, evidence).
+//	1.1  - added process/file/network/container sub-documents and
+//	       correlation_id for cross-event correlation in SIEMs.
+//	1.2  - kill_chain_phase, defense_layer, soc_escalate, response (OODA Act).
+//	1.3  - bhv.md taxonomy: macro, micro, src, type, anchor, conf_band.
 const SchemaVersion = "1.3"
 
 // DefenseLayerEndpoint is the layer tag for events emitted by this agent.
@@ -91,15 +91,15 @@ type ProcessContext struct {
 // FileContext is the optional per-event file snapshot; populated by
 // file-centric detectors (web, integrity, persistence-file).
 type FileContext struct {
-	Path      string `json:"path,omitempty"`
-	SHA256    string `json:"sha256,omitempty"`
-	MD5       string `json:"md5,omitempty"`
-	Size      int64  `json:"size,omitempty"`
-	OwnerUID  uint32 `json:"owner_uid,omitempty"`
-	Mode      string `json:"mode,omitempty"`
-	MtimeUTC  string `json:"mtime_utc,omitempty"`
-	SetUID    bool   `json:"setuid,omitempty"`
-	SetGID    bool   `json:"setgid,omitempty"`
+	Path     string `json:"path,omitempty"`
+	SHA256   string `json:"sha256,omitempty"`
+	MD5      string `json:"md5,omitempty"`
+	Size     int64  `json:"size,omitempty"`
+	OwnerUID uint32 `json:"owner_uid,omitempty"`
+	Mode     string `json:"mode,omitempty"`
+	MtimeUTC string `json:"mtime_utc,omitempty"`
+	SetUID   bool   `json:"setuid,omitempty"`
+	SetGID   bool   `json:"setgid,omitempty"`
 }
 
 // NetworkContext is populated by the network sensor and by any other
@@ -124,9 +124,9 @@ type ContainerContext struct {
 
 // ResponseContext records the OODA Act phase outcome (audit or enforce).
 type ResponseContext struct {
-	Action        string `json:"action,omitempty"`          // alert_only|quarantine_file|kill_process|isolate_host
-	Mode          string `json:"mode,omitempty"`            // audit|enforce
-	Result        string `json:"result,omitempty"`          // applied|skipped|denied|audit_logged
+	Action        string `json:"action,omitempty"` // alert_only|quarantine_file|kill_process|isolate_host
+	Mode          string `json:"mode,omitempty"`   // audit|enforce
+	Result        string `json:"result,omitempty"` // applied|skipped|denied|audit_logged
 	Reason        string `json:"reason,omitempty"`
 	Target        string `json:"target,omitempty"`          // pid, path, or host scope
 	LoopLatencyMS int64  `json:"loop_latency_ms,omitempty"` // observe (sensor) -> act elapsed
@@ -165,14 +165,14 @@ type Event struct {
 	Response       *ResponseContext `json:"response,omitempty"`
 
 	// 1.3 additions — bhv.md Macro→Micro→Nano taxonomy.
-	Macro         string `json:"macro,omitempty"`          // e.g. M1, M2
-	Micro         string `json:"micro,omitempty"`          // e.g. M1.1
-	Src           string `json:"src,omitempty"`            // EBPF-EXEC|AUDIT|FIM|...
-	Type          string `json:"type,omitempty"`           // EVENT|DELTA|STATE
-	Anchor        string `json:"anchor,omitempty"`         // cgroup v2 path / systemd unit
-	ConfBand      string `json:"conf_band,omitempty"`      // HIGH|MEDIUM|LOW
-	EvidenceLoss  bool   `json:"evidence_loss,omitempty"`  // CHAIN-6 flag
-	ChainID       string `json:"chain_id,omitempty"`       // CHAIN-1 … CHAIN-6
+	Macro        string `json:"macro,omitempty"`         // e.g. M1, M2
+	Micro        string `json:"micro,omitempty"`         // e.g. M1.1
+	Src          string `json:"src,omitempty"`           // EBPF-EXEC|AUDIT|FIM|...
+	Type         string `json:"type,omitempty"`          // EVENT|DELTA|STATE
+	Anchor       string `json:"anchor,omitempty"`        // cgroup v2 path / systemd unit
+	ConfBand     string `json:"conf_band,omitempty"`     // HIGH|MEDIUM|LOW
+	EvidenceLoss bool   `json:"evidence_loss,omitempty"` // CHAIN-6 flag
+	ChainID      string `json:"chain_id,omitempty"`      // CHAIN-1 … CHAIN-6
 }
 
 // FindingOpts carries taxonomy + scoring inputs for NewFinding.

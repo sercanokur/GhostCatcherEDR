@@ -15,13 +15,13 @@ import (
 )
 
 const (
-	RuleSocketAccess   = "CONTAINER_SOCKET_ACCESS"
-	RuleHostMount      = "CONTAINER_HOST_MOUNT"
-	RuleRuncSelfExe    = "RUNC_SELF_EXE_WRITE"
-	RuleCgroupRelease  = "CGROUP_RELEASE_AGENT_WRITE"
+	RuleSocketAccess    = "CONTAINER_SOCKET_ACCESS"
+	RuleHostMount       = "CONTAINER_HOST_MOUNT"
+	RuleRuncSelfExe     = "RUNC_SELF_EXE_WRITE"
+	RuleCgroupRelease   = "CGROUP_RELEASE_AGENT_WRITE"
 	RulePrivilegedStart = "CONTAINER_PRIVILEGED_START"
-	RuleLXDHostDisk    = "LXD_HOST_DISK_ATTACH"
-	RuleNSEscapeSetns  = "NS_ESCAPE_SETNS"
+	RuleLXDHostDisk     = "LXD_HOST_DISK_ATTACH"
+	RuleNSEscapeSetns   = "NS_ESCAPE_SETNS"
 )
 
 var containerSockets = []string{

@@ -14,12 +14,13 @@ import (
 // engine.
 //
 // Supported detection constructs:
-//   selection:
-//     EventID: 1
-//     CommandLine|contains: "foo"
-//     CommandLine|endswith: ".sh"
-//     Image|contains|all: [a, b]
-//   condition: selection
+//
+//	selection:
+//	  EventID: 1
+//	  CommandLine|contains: "foo"
+//	  CommandLine|endswith: ".sh"
+//	  Image|contains|all: [a, b]
+//	condition: selection
 //
 // `condition: all of them` / `1 of selection_*` etc. are not supported
 // here (yet); those rules are skipped with a warning-style error at load.

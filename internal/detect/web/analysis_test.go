@@ -64,12 +64,12 @@ func TestMagicByteMismatch_HiddenPHPInTxt(t *testing.T) {
 
 func TestHasSuspiciousExtension(t *testing.T) {
 	cases := map[string]bool{
-		"/a/b.PHP":   true,
-		"/a/b.jspx":  true,
-		"/a/b.aspx":  true,
-		"/a/b.html":  false,
-		"/a/b.ashx":  true,
-		"/a/b.Phar":  true,
+		"/a/b.PHP":  true,
+		"/a/b.jspx": true,
+		"/a/b.aspx": true,
+		"/a/b.html": false,
+		"/a/b.ashx": true,
+		"/a/b.Phar": true,
 	}
 	for p, want := range cases {
 		if got := hasSuspiciousExtension(p); got != want {

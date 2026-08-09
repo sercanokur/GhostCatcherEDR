@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	RuleUserPersistence   = "USER_ACCOUNT_ANOMALY"
-	RuleUserShellEnabled  = "USER_SHELL_ENABLED"
-	RuleUserPasswdHash    = "USER_PASSWD_HASH_CHANGE"
+	RuleUserPersistence  = "USER_ACCOUNT_ANOMALY"
+	RuleUserShellEnabled = "USER_SHELL_ENABLED"
+	RuleUserPasswdHash   = "USER_PASSWD_HASH_CHANGE"
 )
 
 var userFiles = []string{"/etc/passwd", "/etc/shadow"}

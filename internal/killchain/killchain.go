@@ -6,13 +6,13 @@ import "strings"
 
 // Lockheed Martin kill-chain phases used in event.kill_chain_phase.
 const (
-	PhaseReconnaissance       = "reconnaissance"
-	PhaseWeaponization        = "weaponization"
-	PhaseDelivery             = "delivery"
-	PhaseExploitation         = "exploitation"
-	PhaseInstallation         = "installation"
-	PhaseCommandAndControl    = "c2"
-	PhaseActionsOnObjectives  = "actions-on-objectives"
+	PhaseReconnaissance      = "reconnaissance"
+	PhaseWeaponization       = "weaponization"
+	PhaseDelivery            = "delivery"
+	PhaseExploitation        = "exploitation"
+	PhaseInstallation        = "installation"
+	PhaseCommandAndControl   = "c2"
+	PhaseActionsOnObjectives = "actions-on-objectives"
 )
 
 // PhaseFor returns the kill-chain phase for a MITRE tactic. ruleOverride, when

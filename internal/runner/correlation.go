@@ -11,11 +11,11 @@ import (
 
 // corrEntry records one past firing used for time-windowed correlation.
 type corrEntry struct {
-	ruleID    string
-	entity    string
-	anchor    string
-	confBand  string
-	when      time.Time
+	ruleID   string
+	entity   string
+	anchor   string
+	confBand string
+	when     time.Time
 }
 
 // correlator keeps a bounded ring of recent firings and evaluates both

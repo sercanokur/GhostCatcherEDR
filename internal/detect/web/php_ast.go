@@ -36,7 +36,7 @@ var dangerousSinks = map[string]struct{}{
 	"system": {}, "exec": {}, "passthru": {}, "shell_exec": {},
 	"proc_open": {}, "popen": {}, "pcntl_exec": {},
 	"preg_replace": {}, // /e modifier
-	"include": {}, "include_once": {}, "require": {}, "require_once": {},
+	"include":      {}, "include_once": {}, "require": {}, "require_once": {},
 	"file_get_contents": {}, "file_put_contents": {}, "fwrite": {},
 }
 

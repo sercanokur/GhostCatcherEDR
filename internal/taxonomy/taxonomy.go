@@ -28,11 +28,11 @@ type Nano struct {
 
 // Chain is an ordered correlation chain (CHAIN-1 … CHAIN-6).
 type Chain struct {
-	ID       string     `yaml:"id"`
-	Window   string     `yaml:"window"`
-	Score    string     `yaml:"score"` // CRITICAL
-	Flag     string     `yaml:"flag"`  // e.g. evidence_loss
-	Steps    [][]string `yaml:"steps"` // ordered groups; any-of within a group
+	ID     string     `yaml:"id"`
+	Window string     `yaml:"window"`
+	Score  string     `yaml:"score"` // CRITICAL
+	Flag   string     `yaml:"flag"`  // e.g. evidence_loss
+	Steps  [][]string `yaml:"steps"` // ordered groups; any-of within a group
 }
 
 // Mapping is the full bhv catalog file.

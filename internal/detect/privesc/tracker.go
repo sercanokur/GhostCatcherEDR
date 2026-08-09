@@ -27,11 +27,11 @@ type CredState struct {
 // Transition describes a non-root → privileged credential jump on the
 // same process instance.
 type Transition struct {
-	Key      ProcessKey
-	Prev     CredState
-	Curr     CredState
-	Kind     string // euid_root | capeff_full
-	SeenAt   time.Time
+	Key    ProcessKey
+	Prev   CredState
+	Curr   CredState
+	Kind   string // euid_root | capeff_full
+	SeenAt time.Time
 }
 
 // Tracker remembers the last credential state per process instance and

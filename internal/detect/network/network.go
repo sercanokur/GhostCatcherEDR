@@ -18,12 +18,12 @@ import (
 )
 
 const (
-	RuleSocketStdio   = "PROC_SOCKET_STDIO"
-	RuleListenNew     = "NETWORK_LISTEN_NEW"
+	RuleSocketStdio     = "PROC_SOCKET_STDIO"
+	RuleListenNew       = "NETWORK_LISTEN_NEW"
 	RuleWebWorkerEgress = "NETWORK_WEB_WORKER_EGRESS"
-	RuleIMDSAccess    = "NETWORK_IMDS_ACCESS"
-	RuleRawIPNoDNS    = "NETWORK_RAW_IP_NO_DNS"
-	RuleBeaconPeriodic = "NETWORK_BEACON_PERIODIC"
+	RuleIMDSAccess      = "NETWORK_IMDS_ACCESS"
+	RuleRawIPNoDNS      = "NETWORK_RAW_IP_NO_DNS"
+	RuleBeaconPeriodic  = "NETWORK_BEACON_PERIODIC"
 )
 
 // suspiciousShellComms are interactive shells / scripting engines that, when

@@ -31,8 +31,8 @@ var expectedShadowReaders = map[string]struct{}{
 }
 
 type massCounter struct {
-	mu    sync.Mutex
-	hits  map[int][]time.Time
+	mu   sync.Mutex
+	hits map[int][]time.Time
 }
 
 var mass = &massCounter{hits: map[int][]time.Time{}}
@@ -85,12 +85,12 @@ func RouteOpenat(cfg *config.Config, pack *rules.Pack, agentVer string, ev senso
 			ID:   path,
 			Path: path,
 		},
-		Signals:   sigs,
-		Evidence:  path + " opened by " + ev.Comm,
-		Src:       event.SrcAudit,
-		Type:      event.TypeEvent,
-		Anchor:    ainfo.Anchor,
-		ConfBand:  event.ConfHigh,
+		Signals:  sigs,
+		Evidence: path + " opened by " + ev.Comm,
+		Src:      event.SrcAudit,
+		Type:     event.TypeEvent,
+		Anchor:   ainfo.Anchor,
+		ConfBand: event.ConfHigh,
 		Process: &event.ProcessContext{
 			PID: ev.PID, Comm: ev.Comm, UID: int(ev.UID),
 			Cgroup: ainfo.CgroupPath, SystemdUnit: ainfo.SystemdUnit,

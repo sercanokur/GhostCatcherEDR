@@ -11,12 +11,12 @@ import (
 type stepStatus string
 
 const (
-	statusIdle      stepStatus = "idle"
-	statusRunning   stepStatus = "running"
-	statusDetected  stepStatus = "detected"
-	statusMissed    stepStatus = "missed"
-	statusOK        stepStatus = "ok" // reset / no ES rule
-	statusError     stepStatus = "error"
+	statusIdle     stepStatus = "idle"
+	statusRunning  stepStatus = "running"
+	statusDetected stepStatus = "detected"
+	statusMissed   stepStatus = "missed"
+	statusOK       stepStatus = "ok" // reset / no ES rule
+	statusError    stepStatus = "error"
 )
 
 type StepDef struct {

@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	RuleKmodNew       = "KERNEL_MODULE_NEW"
+	RuleKmodNew        = "KERNEL_MODULE_NEW"
 	RuleModLoadPathMod = "KERNEL_MODLOAD_PATH_CHANGED"
 )
 

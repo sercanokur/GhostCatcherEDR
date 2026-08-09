@@ -18,15 +18,16 @@ import (
 // verification produced a failure character for the interested attributes.
 //
 // The columns (8 chars + file-type + path) are documented in rpm(8).
-//   S = size differs
-//   M = mode differs
-//   5 = digest (md5/sha256) differs
-//   D = device mismatch
-//   L = symlink target differs
-//   U = user differs
-//   G = group differs
-//   T = mtime differs
-//   P = capabilities differ
+//
+//	S = size differs
+//	M = mode differs
+//	5 = digest (md5/sha256) differs
+//	D = device mismatch
+//	L = symlink target differs
+//	U = user differs
+//	G = group differs
+//	T = mtime differs
+//	P = capabilities differ
 //
 // The agent filters to binaries under cfg.IntegrityPaths when the list is
 // non-empty; otherwise every failure is emitted.

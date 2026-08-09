@@ -174,10 +174,10 @@ func bytesStartsWithAny(b []byte, prefixes ...[]byte) bool {
 // fileAttributes gathers host-side ownership/mode flags that are cheap to
 // compute and valuable as independent corroborating signals.
 type fileAttributes struct {
-	SetUID bool
-	SetGID bool
+	SetUID   bool
+	SetGID   bool
 	OwnerUID uint32
-	Mode os.FileMode
+	Mode     os.FileMode
 }
 
 func readFileAttributes(fi os.FileInfo) fileAttributes {

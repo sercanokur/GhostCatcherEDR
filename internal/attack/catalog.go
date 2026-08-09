@@ -53,11 +53,11 @@ var BaselineTechniques = []TechniqueMeta{
 
 // Coverage holds techniques covered by a rule pack vs the baseline set.
 type Coverage struct {
-	ByTactic   map[string][]string
-	Covered    map[string]struct{}
-	Uncovered  []string
-	RuleCount  int
-	TechCount  int
+	ByTactic  map[string][]string
+	Covered   map[string]struct{}
+	Uncovered []string
+	RuleCount int
+	TechCount int
 }
 
 // Analyze builds coverage from a loaded rule pack.
@@ -124,10 +124,10 @@ func SummaryText(pack *rules.Pack) string {
 
 // NavigatorLayer is ATT&CK Navigator layer JSON (subset).
 type NavigatorLayer struct {
-	Name        string                 `json:"name"`
-	Versions    map[string]string      `json:"versions"`
-	Techniques  []NavigatorTechnique   `json:"techniques"`
-	Gradient    map[string]interface{} `json:"gradient"`
+	Name       string                 `json:"name"`
+	Versions   map[string]string      `json:"versions"`
+	Techniques []NavigatorTechnique   `json:"techniques"`
+	Gradient   map[string]interface{} `json:"gradient"`
 }
 
 type NavigatorTechnique struct {
@@ -147,13 +147,13 @@ func BuildNavigatorLayer(pack *rules.Pack) NavigatorLayer {
 	return NavigatorLayer{
 		Name: "GhostCatcher " + pack.Version,
 		Versions: map[string]string{
-			"attack": "15",
+			"attack":    "15",
 			"navigator": "5",
-			"layer": "4.5",
+			"layer":     "4.5",
 		},
 		Techniques: techs,
 		Gradient: map[string]interface{}{
-			"colors": []string{"#ff6666", "#ffe766", "#8ec843"},
+			"colors":   []string{"#ff6666", "#ffe766", "#8ec843"},
 			"minValue": 0,
 			"maxValue": 1,
 		},
