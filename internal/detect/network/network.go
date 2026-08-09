@@ -18,9 +18,12 @@ import (
 )
 
 const (
-	RuleReverseShell     = "NETWORK_REVERSE_SHELL"
-	RuleUnexpectedListen = "NETWORK_UNEXPECTED_LISTEN"
-	RuleWebWorkerEgress  = "NETWORK_WEB_WORKER_EGRESS"
+	RuleSocketStdio   = "PROC_SOCKET_STDIO"
+	RuleListenNew     = "NETWORK_LISTEN_NEW"
+	RuleWebWorkerEgress = "NETWORK_WEB_WORKER_EGRESS"
+	RuleIMDSAccess    = "NETWORK_IMDS_ACCESS"
+	RuleRawIPNoDNS    = "NETWORK_RAW_IP_NO_DNS"
+	RuleBeaconPeriodic = "NETWORK_BEACON_PERIODIC"
 )
 
 // suspiciousShellComms are interactive shells / scripting engines that, when
@@ -93,11 +96,11 @@ func Scan(cfg *config.Config, _ *baseline.Snapshot, pack *rules.Pack, agentVer s
 				if pid != 0 {
 					sigs = append(sigs, "comm:"+comm)
 				}
-				conf, _ := rules.Score(pack, RuleUnexpectedListen, sigs)
+				conf, _ := rules.Score(pack, RuleListenNew, sigs)
 				if conf < 40 {
 					conf = 40
 				}
-				events = append(events, buildEvent(RuleUnexpectedListen, pid, comm, row, sigs,
+				events = append(events, buildEvent(RuleListenNew, pid, comm, row, sigs,
 					[]string{"T1571"}, now, cfg, pack, agentVer, true))
 			}
 			continue
@@ -123,13 +126,20 @@ func Scan(cfg *config.Config, _ *baseline.Snapshot, pack *rules.Pack, agentVer s
 		// Reverse shell: shell-ish process talking outbound.
 		if _, ok := suspiciousShellComms[comm]; ok {
 			sigs := []string{"shell_outbound_connection", "comm:" + comm, "remote:" + row.Remote.String() + ":" + strconv.Itoa(row.RemoteP)}
-			events = append(events, buildEvent(RuleReverseShell, pid, comm, row, sigs,
+			events = append(events, buildEvent(RuleSocketStdio, pid, comm, row, sigs,
 				[]string{"T1059.004", "T1571"}, now, cfg, pack, agentVer, false))
 			continue
 		}
 		// Web worker egress: httpd/nginx/apache2 opening outbound connections.
 		if _, ok := webWorkerPIDs[pid]; ok {
-			sigs := []string{"web_worker_egress", "comm:" + comm, "remote:" + row.Remote.String() + ":" + strconv.Itoa(row.RemoteP)}
+			remoteStr := row.Remote.String()
+			if remoteStr == "169.254.169.254" || remoteStr == "fd00:ec2::254" {
+				sigs := []string{"network_imds_access", "comm:" + comm, "remote:" + remoteStr}
+				events = append(events, buildEvent(RuleIMDSAccess, pid, comm, row, sigs,
+					[]string{"T1552.005"}, now, cfg, pack, agentVer, false))
+				continue
+			}
+			sigs := []string{"web_worker_egress", "comm:" + comm, "remote:" + remoteStr + ":" + strconv.Itoa(row.RemoteP)}
 			events = append(events, buildEvent(RuleWebWorkerEgress, pid, comm, row, sigs,
 				[]string{"T1041", "T1071.001"}, now, cfg, pack, agentVer, false))
 		}

@@ -99,3 +99,43 @@ var rawOnlyPatterns = map[string]struct{}{
 	"hex_blob":         {},
 	"chr_chain":        {},
 }
+
+var execPrimitivePatterns = map[string]struct{}{
+	"dynamic_eval": {}, "php_exec_funcs": {}, "preg_replace_e": {},
+	"jsp_runtime_exec": {}, "jsp_processbuilder": {}, "aspx_process_start": {},
+	"backtick_exec": {}, "call_user_func_eval": {}, "assert_user_input": {},
+	"short_eval_payload": {}, "eval_gzinflate_chain": {},
+}
+
+var inputChannelPatterns = map[string]struct{}{
+	"user_input_call": {}, "assert_user_input": {}, "short_eval_payload": {},
+	"aspx_response_write_eval": {}, "php_wrapper_abuse": {},
+	"move_uploaded_file_dynamic": {},
+}
+
+var obfuscationPatterns = map[string]struct{}{
+	"encoding_obfuscation": {}, "long_base64_blob": {}, "hex_blob": {},
+	"chr_chain": {}, "eval_gzinflate_chain": {}, "double_dollar_var_var": {},
+}
+
+// classifyPatternCategories maps matched pattern names to bhv.md buckets.
+func classifyPatternCategories(matched []string) (execPrim, input, obfusc bool) {
+	for _, m := range matched {
+		if _, ok := execPrimitivePatterns[m]; ok {
+			execPrim = true
+		}
+		if _, ok := inputChannelPatterns[m]; ok {
+			input = true
+		}
+		if _, ok := obfuscationPatterns[m]; ok {
+			obfusc = true
+		}
+		// Combined patterns imply both.
+		if m == "assert_user_input" || m == "short_eval_payload" || m == "user_input_call" {
+			execPrim = true
+			input = true
+		}
+	}
+	return
+}
+

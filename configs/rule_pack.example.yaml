@@ -1,32 +1,29 @@
-version: "1.1.0"
+version: "2.0.0"
 rules:
   - id: SSH_AUTHKEY_NEW
-    techniques: ["T1098.004"]
+    techniques: [T1098.004]
     tactic: persistence
+    description: New SSH authorized_keys fingerprint vs baseline
     min_signals: 1
     base_score: 75
     per_signal_bonus: 12
     cap_score: 100
-    description: New SSH authorized_keys fingerprint vs baseline
-
   - id: SSH_AUTHKEY_INVALID_LINE
-    techniques: ["T1098.004"]
+    techniques: [T1098.004]
     tactic: persistence
     min_signals: 1
     base_score: 55
     per_signal_bonus: 10
     cap_score: 85
-
   - id: CRON_HIGH_RISK
-    techniques: ["T1053.003"]
+    techniques: [T1053.003]
     tactic: persistence
     min_signals: 1
     base_score: 60
     per_signal_bonus: 15
     cap_score: 100
-
   - id: LD_SO_PRELOAD_FILE
-    techniques: ["T1574.006", "T1014"]
+    techniques: [T1574.006, T1014]
     tactic: defense-evasion
     kill_chain_phase: installation
     min_signals: 1
@@ -35,25 +32,22 @@ rules:
     cap_score: 100
     response:
       action: quarantine_file
-
   - id: PROC_LD_PRELOAD_ENV
-    techniques: ["T1574.006", "T1014"]
+    techniques: [T1574.006, T1014]
     tactic: defense-evasion
     min_signals: 1
     base_score: 70
     per_signal_bonus: 12
     cap_score: 100
-
   - id: WEB_SHELL_PATTERN
-    techniques: ["T1505.003", "T1059.004"]
+    techniques: [T1505.003, T1059.004]
     tactic: persistence
     min_signals: 2
     base_score: 55
     per_signal_bonus: 15
     cap_score: 100
-
   - id: PROC_RWX_MEMORY_SEGMENT
-    techniques: ["T1055", "T1505.003"]
+    techniques: [T1055, T1505.003]
     tactic: defense-evasion
     kill_chain_phase: exploitation
     min_signals: 1
@@ -62,56 +56,41 @@ rules:
     cap_score: 100
     response:
       action: kill_process
-
-  - id: BINARY_INTEGRITY_MD5_MISMATCH
-    techniques: ["T1036", "T1574.006"]
+  - id: LIB_HASH_MISMATCH
+    techniques: [T1036, T1574.006]
     tactic: defense-evasion
     min_signals: 1
     base_score: 85
     per_signal_bonus: 5
     cap_score: 100
-
   - id: WEB_WORKER_RECON_CHILD
-    techniques: ["T1059.004", "T1505.003"]
+    techniques: [T1059.004, T1505.003]
     tactic: execution
     min_signals: 1
     base_score: 72
     per_signal_bonus: 12
     cap_score: 100
-
   - id: CVE_2026_31431_AF_ALG_AEAD
-    techniques: ["T1068"]
+    techniques: [T1068]
     tactic: privilege-escalation
     kill_chain_phase: exploitation
+    description: AF_ALG SOCK_SEQPACKET socket() created by a process outside the known disk-encryption / kTLS allowlist. This is the mandatory first syscall of every public CVE-2026-31431 ("Copy Fail") Linux LPE exploit; the AEAD interface is then driven via splice() to poison the page cache of a SUID binary.
     min_signals: 1
     base_score: 90
     per_signal_bonus: 5
     cap_score: 100
     response:
       action: kill_process
-    description: >
-      AF_ALG SOCK_SEQPACKET socket() created by a process outside the
-      known disk-encryption / kTLS allowlist. This is the mandatory
-      first syscall of every public CVE-2026-31431 ("Copy Fail") Linux
-      LPE exploit; the AEAD interface is then driven via splice() to
-      poison the page cache of a SUID binary.
-
   - id: CVE_2026_31431_PAGE_CACHE_POISONING
-    techniques: ["T1068", "T1014"]
+    techniques: [T1068, T1014]
     tactic: privilege-escalation
+    description: A watched SUID binary (e.g. /usr/bin/su) hashes differently when read through the page cache vs. immediately after dropping its cached pages. CVE-2026-31431 ("Copy Fail") corrupts cached pages of setuid binaries without modifying the file on disk, which is exactly the asymmetry this rule reports.
     min_signals: 1
     base_score: 95
     per_signal_bonus: 5
     cap_score: 100
-    description: >
-      A watched SUID binary (e.g. /usr/bin/su) hashes differently when
-      read through the page cache vs. immediately after dropping its
-      cached pages. CVE-2026-31431 ("Copy Fail") corrupts cached pages
-      of setuid binaries without modifying the file on disk, which is
-      exactly the asymmetry this rule reports.
-
-  - id: SENSOR_PTRACE_ATTACH
-    techniques: ["T1055"]
+  - id: PROC_PTRACE_INJECT
+    techniques: [T1055]
     tactic: defense-evasion
     kill_chain_phase: exploitation
     min_signals: 1
@@ -120,9 +99,8 @@ rules:
     cap_score: 100
     response:
       action: kill_process
-
-  - id: SENSOR_MEMFD_CREATE
-    techniques: ["T1055.001"]
+  - id: PROC_MEMFD_EXEC
+    techniques: [T1055.001]
     tactic: execution
     kill_chain_phase: exploitation
     min_signals: 1
@@ -131,9 +109,8 @@ rules:
     cap_score: 100
     response:
       action: kill_process
-
-  - id: SENSOR_INIT_MODULE
-    techniques: ["T1547.006"]
+  - id: KERNEL_MODULE_LOAD
+    techniques: [T1547.006]
     tactic: persistence
     kill_chain_phase: installation
     min_signals: 1
@@ -142,31 +119,109 @@ rules:
     cap_score: 100
     response:
       action: kill_process
-
   - id: PROC_SUDDEN_ROOT
-    techniques: ["T1068"]
+    techniques: [T1068]
     tactic: privilege-escalation
     kill_chain_phase: exploitation
+    description: A process instance (PID + starttime) that previously ran with non-root credentials gained euid=0 or a near-full CapEff set without matching a known legitimate privilege helper (sudo, su, pkexec, ...). Behavior-only; not mapped to a specific CVE.
     min_signals: 1
     base_score: 80
     per_signal_bonus: 4
     cap_score: 100
     response:
       action: alert_only
-    description: >
-      A process instance (PID + starttime) that previously ran with
-      non-root credentials gained euid=0 or a near-full CapEff set
-      without matching a known legitimate privilege helper (sudo, su,
-      pkexec, ...). Behavior-only; not mapped to a specific CVE.
-
   - id: CREDENTIAL_ACCESS_PROC_DUMP
-    techniques: ["T1003"]
+    techniques: [T1003]
     tactic: credential-access
     kill_chain_phase: actions-on-objectives
+    description: Linux analog of OS credential dumping (e.g. /proc access patterns)
     min_signals: 1
     base_score: 92
     per_signal_bonus: 5
     cap_score: 100
-    description: Linux analog of OS credential dumping (e.g. /proc access patterns)
     response:
       action: kill_process
+  - id: WEB_WORKER_SHELL_CHILD
+    techniques: [T1059.004]
+    tactic: execution
+    macro: M1
+    micro: M1.2
+    src: EBPF-EXEC
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 80
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: WEB_WORKER_INTERP_CHILD
+    techniques: [T1059.004, T1059.006]
+    tactic: execution
+    macro: M1
+    micro: M1.2
+    src: EBPF-EXEC
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 80
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: WEB_WORKER_DOWNLOADER_CHILD
+    techniques: [T1105]
+    tactic: execution
+    macro: M1
+    micro: M1.2
+    src: EBPF-EXEC
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 80
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: NETWORK_IMDS_ACCESS
+    techniques: [T1552.005]
+    tactic: credential-access
+    macro: M1
+    micro: M1.3
+    src: EBPF-NET
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 90
+    per_signal_bonus: 5
+    cap_score: 100
+  - id: PROC_SOCKET_STDIO
+    techniques: [T1059.004, T1571]
+    tactic: command-and-control
+    macro: M1
+    micro: M1.2
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
+    min_signals: 1
+    base_score: 85
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: NETWORK_LISTEN_NEW
+    techniques: [T1571]
+    tactic: command-and-control
+    macro: M1
+    micro: M1.3
+    src: EBPF-NET
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+  - id: PROFILE_HOOK
+    techniques: [T1546.004]
+    tactic: persistence
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 60
+    per_signal_bonus: 10
+    cap_score: 100

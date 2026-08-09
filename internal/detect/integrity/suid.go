@@ -53,15 +53,24 @@ func scanSUID(cfg *config.Config, snap *baseline.Snapshot, pack *rules.Pack, age
 			continue
 		}
 		sigs := []string{"suid_binary_present"}
+		ruleID := RuleSUIDAnomaly
 		if !ok {
 			sigs = append(sigs, "new_suid_binary")
 		} else {
 			sigs = append(sigs, "suid_binary_hash_changed")
 		}
-		if !looksLikePackagedBinary(path) {
+		writable := isWritablePathSUID(path)
+		if writable {
 			sigs = append(sigs, "suid_in_world_writable_path")
+			ruleID = RuleSUIDWritablePath
 		}
-		conf, _ := rules.Score(pack, RuleSUIDAnomaly, sigs)
+		if !looksLikePackagedBinary(path) || !dpkgOwned(path) {
+			sigs = append(sigs, "suid_unpackaged")
+			if ruleID == RuleSUIDAnomaly {
+				ruleID = RuleSUIDUnpackaged
+			}
+		}
+		conf, _ := rules.Score(pack, ruleID, sigs)
 		if contains(sigs, "new_suid_binary") && conf < 90 {
 			conf = 90
 		}
@@ -69,7 +78,7 @@ func scanSUID(cfg *config.Config, snap *baseline.Snapshot, pack *rules.Pack, age
 			SchemaVersion:   event.SchemaVersion,
 			AgentVersion:    agentVer,
 			Timestamp:       now,
-			RuleID:          RuleSUIDAnomaly,
+			RuleID:          ruleID,
 			RulePackVersion: pack.Version,
 			TechniqueIDs:    []string{"T1548.001"},
 			Tactic:          "privilege-escalation",
@@ -79,6 +88,8 @@ func scanSUID(cfg *config.Config, snap *baseline.Snapshot, pack *rules.Pack, age
 			Signals:         sigs,
 			Evidence:        fmt.Sprintf("path=%s sha256=%s", path, hash),
 			LearningOnly:    learning || conf < cfg.MinConfidenceAlert,
+			Src:             event.SrcInventory,
+			Type:            event.TypeDelta,
 		}
 		ev.NormalizeDedup()
 		events = append(events, ev)
@@ -168,6 +179,20 @@ func looksLikePackagedBinary(path string) bool {
 		}
 	}
 	return false
+}
+
+func isWritablePathSUID(path string) bool {
+	for _, p := range []string{"/tmp/", "/var/tmp/", "/dev/shm/", "/home/"} {
+		if strings.HasPrefix(path, p) {
+			return true
+		}
+	}
+	return false
+}
+
+func dpkgOwned(path string) bool {
+	_, err := dpkgOwningPackage(path)
+	return err == nil
 }
 
 // BuildBaselineSUID captures the current SUID inventory into the snapshot.

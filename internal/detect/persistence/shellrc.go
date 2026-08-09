@@ -12,7 +12,7 @@ import (
 	"ghostcatcher/internal/rules"
 )
 
-const RuleShellRCPersistence = "SHELL_RC_PERSISTENCE"
+const RuleShellRCPersistence = "PROFILE_HOOK"
 
 // globalShellRC are system-wide shell init files. Any modification to these
 // affects every interactive login and is therefore a high-value target.

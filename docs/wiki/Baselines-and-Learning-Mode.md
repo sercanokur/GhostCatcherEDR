@@ -2,6 +2,8 @@
 
 GhostCatcher's two-stage detection model — a stable **baseline** plus runtime **delta** — is what keeps it usable in production. This page explains what the baseline contains, the lifecycle of the snapshot file, the learning workflow you should run before turning on alerts, and the optional 2FA on `baseline commit`.
 
+> **bhv.md note:** Prefer building the baseline from a **golden image** (or `dpkg --get-selections` + `dpkg --verify` manifest), not from a live host that may already be compromised. Learning from a post-compromise state accepts attacker persistence as "normal".
+
 ## What the baseline contains
 
 A baseline is a JSON snapshot at `baseline_path` (typically `/var/lib/ghostcatcher/baseline.json`). It is produced by `ghostcatcher baseline commit` and consumed by every detector at startup and on every scan. Today it holds:

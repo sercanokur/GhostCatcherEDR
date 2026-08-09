@@ -22,7 +22,9 @@ type TechniqueMeta struct {
 // used for gap analysis when rules do not cover them.
 var BaselineTechniques = []TechniqueMeta{
 	{ID: "T1059.004", Tactic: "execution", Name: "Unix Shell"},
+	{ID: "T1059.006", Tactic: "execution", Name: "Python"},
 	{ID: "T1053.003", Tactic: "persistence", Name: "Cron"},
+	{ID: "T1053.006", Tactic: "persistence", Name: "Systemd Timers"},
 	{ID: "T1098.004", Tactic: "persistence", Name: "SSH Authorized Keys"},
 	{ID: "T1574.006", Tactic: "defense-evasion", Name: "LD_PRELOAD"},
 	{ID: "T1014", Tactic: "defense-evasion", Name: "Rootkit"},
@@ -30,13 +32,23 @@ var BaselineTechniques = []TechniqueMeta{
 	{ID: "T1055.001", Tactic: "defense-evasion", Name: "Dynamic-link Library Injection"},
 	{ID: "T1068", Tactic: "privilege-escalation", Name: "Exploitation for Privilege Escalation"},
 	{ID: "T1036", Tactic: "defense-evasion", Name: "Masquerading"},
+	{ID: "T1036.005", Tactic: "defense-evasion", Name: "Match Legitimate Name or Location"},
 	{ID: "T1505.003", Tactic: "persistence", Name: "Web Shell"},
 	{ID: "T1071.001", Tactic: "command-and-control", Name: "Web Protocols"},
 	{ID: "T1048", Tactic: "exfiltration", Name: "Exfiltration Over Alternative Protocol"},
 	{ID: "T1003", Tactic: "credential-access", Name: "OS Credential Dumping"},
+	{ID: "T1003.008", Tactic: "credential-access", Name: "/etc/passwd and /etc/shadow"},
+	{ID: "T1552.001", Tactic: "credential-access", Name: "Credentials In Files"},
+	{ID: "T1552.004", Tactic: "credential-access", Name: "Private Keys"},
+	{ID: "T1552.005", Tactic: "credential-access", Name: "Cloud Instance Metadata API"},
 	{ID: "T1021.004", Tactic: "lateral-movement", Name: "SSH"},
 	{ID: "T1547.006", Tactic: "persistence", Name: "Kernel Modules and Extensions"},
 	{ID: "T1562.001", Tactic: "defense-evasion", Name: "Disable or Modify Tools"},
+	{ID: "T1548.001", Tactic: "privilege-escalation", Name: "Setuid and Setgid"},
+	{ID: "T1543.003", Tactic: "persistence", Name: "Systemd Service"},
+	{ID: "T1611", Tactic: "privilege-escalation", Name: "Escape to Host"},
+	{ID: "T1620", Tactic: "defense-evasion", Name: "Reflective Code Loading"},
+	{ID: "T1070.002", Tactic: "defense-evasion", Name: "Clear Linux or Mac System Logs"},
 }
 
 // Coverage holds techniques covered by a rule pack vs the baseline set.

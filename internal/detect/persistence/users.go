@@ -12,7 +12,11 @@ import (
 	"ghostcatcher/internal/rules"
 )
 
-const RuleUserPersistence = "USER_ACCOUNT_ANOMALY"
+const (
+	RuleUserPersistence   = "USER_ACCOUNT_ANOMALY"
+	RuleUserShellEnabled  = "USER_SHELL_ENABLED"
+	RuleUserPasswdHash    = "USER_PASSWD_HASH_CHANGE"
+)
 
 var userFiles = []string{"/etc/passwd", "/etc/shadow"}
 
@@ -41,17 +45,26 @@ func scanUsers(cfg *config.Config, snap *baseline.Snapshot, pack *rules.Pack, ag
 			continue
 		}
 		sigs := []string{"user_db_changed:" + path}
+		ruleID := RuleUserPersistence
 		if path == "/etc/shadow" {
 			if emptyPasswordLine := findEmptyShadowHash(path); emptyPasswordLine != "" {
 				sigs = append(sigs, "empty_password_hash")
 			}
+			ruleID = RuleUserPasswdHash
+			sigs = append(sigs, "user_passwd_hash_change")
 		}
-		conf, _ := rules.Score(pack, RuleUserPersistence, sigs)
+		if path == "/etc/passwd" {
+			if shells := findEnabledServiceShells(path); len(shells) > 0 {
+				sigs = append(sigs, "user_shell_enabled:"+strings.Join(shells, ","))
+				ruleID = RuleUserShellEnabled
+			}
+		}
+		conf, _ := rules.Score(pack, ruleID, sigs)
 		ev := event.Event{
 			SchemaVersion:   event.SchemaVersion,
 			AgentVersion:    agentVer,
 			Timestamp:       now,
-			RuleID:          RuleUserPersistence,
+			RuleID:          ruleID,
 			RulePackVersion: pack.Version,
 			TechniqueIDs:    []string{"T1136.001"},
 			Tactic:          "persistence",
@@ -61,6 +74,8 @@ func scanUsers(cfg *config.Config, snap *baseline.Snapshot, pack *rules.Pack, ag
 			Signals:         sigs,
 			Evidence:        "file hash changed since baseline",
 			LearningOnly:    learning || conf < cfg.MinConfidenceAlert,
+			Src:             event.SrcFIM,
+			Type:            event.TypeDelta,
 		}
 		ev.NormalizeDedup()
 		events = append(events, ev)
@@ -121,6 +136,41 @@ func findEmptyShadowHash(path string) string {
 		}
 	}
 	return ""
+}
+
+// findEnabledServiceShells returns service-like accounts whose shell is no
+// longer nologin/false (bhv USER_SHELL_ENABLED).
+func findEnabledServiceShells(path string) []string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	sc := bufio.NewScanner(strings.NewReader(string(data)))
+	for sc.Scan() {
+		parts := strings.Split(sc.Text(), ":")
+		if len(parts) < 7 {
+			continue
+		}
+		name, shell := parts[0], parts[6]
+		if name == "root" || name == "sync" || name == "shutdown" || name == "halt" {
+			continue
+		}
+		// Heuristic service accounts: system UIDs or names ending in daemon-ish patterns.
+		uid := parts[2]
+		if uid == "0" {
+			continue
+		}
+		if shell == "/usr/sbin/nologin" || shell == "/bin/false" || shell == "/sbin/nologin" || shell == "" {
+			continue
+		}
+		// Only flag typical service account name patterns / low UIDs.
+		if uid < "1000" || strings.HasSuffix(name, "d") || strings.Contains(name, "www") ||
+			strings.Contains(name, "nginx") || strings.Contains(name, "mysql") {
+			out = append(out, name+":"+shell)
+		}
+	}
+	return out
 }
 
 // BuildBaselineUsers snapshots /etc/passwd and /etc/shadow hashes.

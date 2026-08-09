@@ -5,15 +5,21 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
 	"context"
+	"ghostcatcher/internal/anchor"
 	"ghostcatcher/internal/baseline"
 	"ghostcatcher/internal/config"
 	"ghostcatcher/internal/container"
 	"ghostcatcher/internal/detect/ancestry"
+	"ghostcatcher/internal/detect/containeresc"
 	"ghostcatcher/internal/detect/copyfail"
+	"ghostcatcher/internal/detect/credential"
+	"ghostcatcher/internal/detect/defense"
+	"ghostcatcher/internal/detect/fimextra"
 	"ghostcatcher/internal/detect/integrity"
 	"ghostcatcher/internal/detect/ldpreload"
 	"ghostcatcher/internal/detect/memorymaps"
@@ -39,6 +45,7 @@ import (
 	"ghostcatcher/internal/rules"
 	"ghostcatcher/internal/selfguard"
 	"ghostcatcher/internal/sensor"
+	"ghostcatcher/internal/taxonomy"
 	"ghostcatcher/internal/watch"
 )
 
@@ -127,7 +134,34 @@ func New(cfg *config.Config, pack *rules.Pack) *Runner {
 		}
 	}
 	r.responder = respond.NewEngine(&cfg.Respond, r.vault)
+	mapPath := cfg.MappingPath
+	if mapPath == "" {
+		mapPath = resolveMappingPath()
+	}
+	if mapPath != "" {
+		if m, err := taxonomy.Load(mapPath); err != nil {
+			slog.Warn("bhv mapping load failed", "path", mapPath, "err", err)
+		} else {
+			taxonomy.SetGlobal(m)
+			slog.Info("bhv mapping loaded", "version", m.Version, "nanos", len(m.Nanos), "chains", len(m.Chains))
+			r.correlator.setChains(m.Chains)
+		}
+	}
 	return r
+}
+
+func resolveMappingPath() string {
+	candidates := []string{
+		"configs/mapping.yaml",
+		filepath.Join("..", "..", "configs", "mapping.yaml"),
+		"/etc/ghostcatcher/mapping.yaml",
+	}
+	for _, p := range candidates {
+		if st, err := os.Stat(p); err == nil && !st.IsDir() {
+			return p
+		}
+	}
+	return ""
 }
 
 // initSinks materializes every configured downstream sink. Failures here
@@ -281,6 +315,19 @@ func (r *Runner) RunOnce() error {
 	}
 	all = append(all, ev3...)
 
+	if evUp, err := web.ScanUploadDirs(r.cfg, snap, r.pack, AgentVersion); err == nil {
+		all = append(all, evUp...)
+	}
+	if evTamper, err := web.ScanAppTamper(r.cfg, snap, r.pack, AgentVersion); err == nil {
+		all = append(all, evTamper...)
+	}
+	if evFIM, err := fimextra.Scan(r.cfg, snap, r.pack, AgentVersion); err == nil {
+		all = append(all, evFIM...)
+	}
+	if evDef, err := defense.ScanState(r.cfg, snap, r.pack, AgentVersion); err == nil {
+		all = append(all, evDef...)
+	}
+
 	now := time.Now().UTC()
 	for i := range all {
 		r.processEvent(&all[i], time.Time{}, now)
@@ -311,8 +358,16 @@ func (r *Runner) processEvent(e *event.Event, observedAt, now time.Time) {
 			}
 			e.Signals = append(e.Signals, "correlation_boost")
 		}
+		if boost := r.correlator.matchChain(e, now); boost > 0 {
+			if e.Confidence+boost > 100 {
+				e.Confidence = 100
+			} else {
+				e.Confidence += boost
+			}
+			e.Signals = append(e.Signals, "chain:"+e.ChainID)
+		}
 	}
-	r.correlator.add(e.RuleID, e.Entity.ID, now)
+	r.correlator.addFull(e.RuleID, e.Entity.ID, e.Anchor, e.ConfBand, now)
 	if r.responder != nil {
 		plan := r.responder.Decide(e, rule)
 		r.responder.Apply(plan, e, observedAt)
@@ -334,13 +389,29 @@ func (r *Runner) processEvent(e *event.Event, observedAt, now time.Time) {
 	r.emit(e)
 }
 
-// orient applies doctrine context: enrich, kill-chain phase, defense layer.
+// orient applies doctrine context: enrich, kill-chain phase, defense layer, bhv taxonomy.
 func (r *Runner) orient(e *event.Event) {
 	r.enrich(e)
+	taxonomy.Apply(e)
 	rule, ok := r.pack.ByID(e.RuleID)
 	override := ""
 	if ok {
 		override = rule.KillChainPhase
+		if e.Macro == "" {
+			e.Macro = rule.Macro
+		}
+		if e.Micro == "" {
+			e.Micro = rule.Micro
+		}
+		if e.Src == "" {
+			e.Src = rule.Src
+		}
+		if e.Type == "" {
+			e.Type = rule.Type
+		}
+		if e.ConfBand == "" {
+			e.ConfBand = rule.Conf
+		}
 	}
 	e.KillChainPhase = killchain.PhaseFor(e.Tactic, override)
 	e.DefenseLayer = event.DefenseLayerEndpoint
@@ -393,6 +464,7 @@ func (r *Runner) enrich(e *event.Event) {
 				comm, _ := procfs.Comm(pid)
 				argv, _ := procfs.Cmdline(pid)
 				ppid, _ := procfs.PPid(pid)
+				ainfo := anchor.FromPID(pid)
 				e.Process = &event.ProcessContext{
 					PID:           pid,
 					PPID:          ppid,
@@ -403,6 +475,11 @@ func (r *Runner) enrich(e *event.Event) {
 					EUID:          st.EffUID,
 					CapEff:        st.CapEff,
 					AncestorComms: procfs.Ancestry(pid, 6),
+					Cgroup:        ainfo.CgroupPath,
+					SystemdUnit:   ainfo.SystemdUnit,
+				}
+				if e.Anchor == "" {
+					e.Anchor = ainfo.Anchor
 				}
 			}
 		}
@@ -608,16 +685,60 @@ func (r *Runner) consumeSensor(ctx context.Context, ch <-chan sensor.Event) {
 				if srEv, hit := privesc.RouteSensorEvent(r.cfg, r.pack, AgentVersion, r.privesc, ev); hit {
 					r.dispatchEvent(&srEv, observedAt)
 				}
-				continue
 			}
 			if r.cfg.CopyFail.Enabled && ev.Kind == sensor.KindSocket {
 				if cfEv, hit := copyfail.RouteSensorEvent(r.cfg, r.pack, AgentVersion, ev); hit {
 					r.dispatchEvent(&cfEv, observedAt)
 				}
-				continue
 			}
-			if liveEv, hit := sensorlive.RouteSensorEvent(r.cfg, r.pack, AgentVersion, ev); hit {
-				r.dispatchEvent(&liveEv, observedAt)
+			switch ev.Kind {
+			case sensor.KindOpenat:
+				if ce, hit := credential.RouteOpenat(r.cfg, r.pack, AgentVersion, ev); hit {
+					r.dispatchEvent(&ce, observedAt)
+				}
+				if ce, hit := containeresc.RouteFile(r.cfg, r.pack, AgentVersion, ev); hit {
+					r.dispatchEvent(&ce, observedAt)
+				}
+				if ce, hit := web.RouteDocrootWrite(r.cfg, r.pack, AgentVersion, ev); hit {
+					r.dispatchEvent(&ce, observedAt)
+				}
+			case sensor.KindExec:
+				if ce, hit := defense.RouteExec(r.cfg, r.pack, AgentVersion, ev); hit {
+					r.dispatchEvent(&ce, observedAt)
+				}
+				if ce, hit := containeresc.RouteExec(r.cfg, r.pack, AgentVersion, ev); hit {
+					r.dispatchEvent(&ce, observedAt)
+				}
+			case sensor.KindConnect:
+				if ev.RemoteIP == "169.254.169.254" || ev.RemoteIP == "fd00:ec2::254" {
+					ainfo := anchor.FromPID(ev.PID)
+					sigs := []string{"network_imds_access", "comm:" + ev.Comm}
+					conf, _ := rules.Score(r.pack, network.RuleIMDSAccess, sigs)
+					if conf < 85 {
+						conf = 85
+					}
+					imds := event.Event{
+						SchemaVersion: event.SchemaVersion, AgentVersion: AgentVersion,
+						Timestamp: observedAt.UTC(), RuleID: network.RuleIMDSAccess,
+						RulePackVersion: r.pack.Version, Confidence: conf,
+						Severity: rules.SeverityFromConfidence(conf, r.cfg.LearningMode),
+						Entity:   event.Entity{Type: event.EntityProcess, ID: strconv.Itoa(ev.PID)},
+						Signals:  sigs, Evidence: "IMDS " + ev.RemoteIP,
+						Src: event.SrcAudit, Type: event.TypeEvent, Anchor: ainfo.Anchor, ConfBand: event.ConfHigh,
+						Network: &event.NetworkContext{RemoteIP: ev.RemoteIP, RemotePort: ev.RemotePort, Direction: "outbound"},
+					}
+					imds.NormalizeDedup()
+					r.dispatchEvent(&imds, observedAt)
+				}
+			case sensor.KindPtrace, sensor.KindMemfdCreate, sensor.KindInitModule:
+				if liveEv, hit := sensorlive.RouteSensorEvent(r.cfg, r.pack, AgentVersion, ev); hit {
+					r.dispatchEvent(&liveEv, observedAt)
+				}
+				if ev.Kind == sensor.KindPtrace {
+					if ce, hit := credential.RoutePtraceMem(r.cfg, r.pack, AgentVersion, ev); hit {
+						r.dispatchEvent(&ce, observedAt)
+					}
+				}
 			}
 		}
 	}

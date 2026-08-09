@@ -1,0 +1,998 @@
+# GhostCatcher bhv.md Macro → Micro → Nano mapping (machine-readable).
+# rule_id == nano id. Non-bhv rules mapped to nearest macro.
+version: "2.0.0"
+nanos:
+  # --- M1.1 Web shell drop ---
+  - id: WEB_DOCROOT_EXEC_WRITE
+    macro: M1
+    micro: M1.1
+    src: EBPF-FILE
+    type: EVENT
+    conf: HIGH
+    techniques: [T1190, T1505.003]
+    tactic: persistence
+    desc: Process in a web service cgroup wrote interpretable content under docroot
+  - id: WEB_SHELL_PATTERN
+    macro: M1
+    micro: M1.1
+    src: FIM
+    type: STATE
+    conf: MEDIUM
+    techniques: [T1505.003, T1059.004]
+    tactic: persistence
+    fp: wp-content/plugins updates, composer install, vendor/, Laravel view cache
+  - id: WEB_APP_FILE_TAMPER
+    macro: M1
+    micro: M1.1
+    src: INVENTORY
+    type: DELTA
+    conf: MEDIUM
+    techniques: [T1505.003]
+    tactic: persistence
+  - id: WEB_UPLOAD_DIR_EXEC
+    macro: M1
+    micro: M1.1
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1505.003]
+    tactic: persistence
+  - id: YARA_DISK_MATCH
+    macro: M1
+    micro: M1.1
+    src: FIM
+    type: STATE
+    conf: HIGH
+    techniques: [T1505.003, T1204.002]
+    tactic: persistence
+    desc: Non-bhv YARA disk match mapped under web content macro
+
+  # --- M1.2 Web worker recon / exec ---
+  - id: WEB_WORKER_RECON_CHILD
+    macro: M1
+    micro: M1.2
+    src: EBPF-EXEC
+    type: EVENT
+    conf: HIGH
+    techniques: [T1059.004, T1505.003]
+    tactic: execution
+  - id: WEB_WORKER_SHELL_CHILD
+    macro: M1
+    micro: M1.2
+    src: EBPF-EXEC
+    type: EVENT
+    conf: HIGH
+    techniques: [T1059.004]
+    tactic: execution
+  - id: WEB_WORKER_INTERP_CHILD
+    macro: M1
+    micro: M1.2
+    src: EBPF-EXEC
+    type: EVENT
+    conf: HIGH
+    techniques: [T1059.004, T1059.006]
+    tactic: execution
+  - id: WEB_WORKER_DOWNLOADER_CHILD
+    macro: M1
+    micro: M1.2
+    src: EBPF-EXEC
+    type: EVENT
+    conf: HIGH
+    techniques: [T1105, T1059.004]
+    tactic: execution
+  - id: PROC_RARE_ANCESTRY
+    macro: M1
+    micro: M1.2
+    src: EBPF-EXEC
+    type: DELTA
+    conf: MEDIUM
+    techniques: [T1059, T1505.003]
+    tactic: execution
+  - id: PROC_SOCKET_STDIO
+    macro: M1
+    micro: M1.2
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
+    techniques: [T1059.004, T1571]
+    tactic: command-and-control
+  - id: PROC_PTY_SPAWN
+    macro: M1
+    micro: M1.2
+    src: EBPF-EXEC
+    type: EVENT
+    conf: HIGH
+    techniques: [T1059.004]
+    tactic: execution
+
+  # --- M1.3 Network from app context ---
+  - id: NETWORK_WEB_WORKER_EGRESS
+    macro: M1
+    micro: M1.3
+    src: EBPF-NET
+    type: DELTA
+    conf: MEDIUM
+    techniques: [T1041, T1071.001]
+    tactic: exfiltration
+  - id: NETWORK_IMDS_ACCESS
+    macro: M1
+    micro: M1.3
+    src: EBPF-NET
+    type: EVENT
+    conf: HIGH
+    techniques: [T1552.005]
+    tactic: credential-access
+  - id: NETWORK_LISTEN_NEW
+    macro: M1
+    micro: M1.3
+    src: EBPF-NET
+    type: DELTA
+    conf: HIGH
+    techniques: [T1571, T1205.002]
+    tactic: command-and-control
+  - id: NETWORK_RAW_IP_NO_DNS
+    macro: M1
+    micro: M1.3
+    src: EBPF-NET
+    type: EVENT
+    conf: MEDIUM
+    techniques: [T1071.001]
+    tactic: command-and-control
+  - id: NETWORK_BEACON_PERIODIC
+    macro: M1
+    micro: M1.3
+    src: EBPF-NET
+    type: STATE
+    conf: MEDIUM
+    techniques: [T1071.001]
+    tactic: command-and-control
+
+  # --- M2.1 SSH persistence ---
+  - id: SSH_AUTHKEY_NEW
+    macro: M2
+    micro: M2.1
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
+    techniques: [T1098.004]
+    tactic: persistence
+  - id: SSH_AUTHKEY_INVALID_LINE
+    macro: M2
+    micro: M2.1
+    src: FIM
+    type: STATE
+    conf: HIGH
+    techniques: [T1098.004]
+    tactic: persistence
+  - id: SSHD_CONFIG_ANOMALY
+    macro: M2
+    micro: M2.1
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1098.004]
+    tactic: persistence
+  - id: SSHD_DROPIN_NEW
+    macro: M2
+    micro: M2.1
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1098.004]
+    tactic: persistence
+  - id: SSHD_FORCED_COMMAND
+    macro: M2
+    micro: M2.1
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1098.004]
+    tactic: persistence
+  - id: SSH_RC_HOOK
+    macro: M2
+    micro: M2.1
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1098.004]
+    tactic: persistence
+  - id: SSH_SOCKET_OVERRIDE
+    macro: M2
+    micro: M2.1
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1098.004]
+    tactic: persistence
+  - id: SSH_HOSTKEY_CHANGE
+    macro: M2
+    micro: M2.1
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
+    techniques: [T1098.004]
+    tactic: persistence
+
+  # --- M2.2 Scheduled tasks ---
+  - id: CRON_HIGH_RISK
+    macro: M2
+    micro: M2.2
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1053.003]
+    tactic: persistence
+  - id: CRON_SPOOL_CHANGE
+    macro: M2
+    micro: M2.2
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
+    techniques: [T1053.003]
+    tactic: persistence
+  - id: CRON_DROPIN_NEW
+    macro: M2
+    micro: M2.2
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
+    techniques: [T1053.003]
+    tactic: persistence
+  - id: CRON_RUNPARTS_EVASION
+    macro: M2
+    micro: M2.2
+    src: FIM
+    type: STATE
+    conf: MEDIUM
+    techniques: [T1053.003]
+    tactic: persistence
+  - id: SYSTEMD_PERSISTENCE
+    macro: M2
+    micro: M2.2
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1053.006, T1543.003]
+    tactic: persistence
+  - id: SYSTEMD_USER_PERSISTENCE
+    macro: M2
+    micro: M2.2
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1543.002]
+    tactic: persistence
+  - id: SYSTEMD_GENERATOR_NEW
+    macro: M2
+    micro: M2.2
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1543.002]
+    tactic: persistence
+  - id: SYSTEMD_DROPIN_OVERRIDE
+    macro: M2
+    micro: M2.2
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
+    techniques: [T1543.003]
+    tactic: persistence
+  - id: AT_JOB_NEW
+    macro: M2
+    micro: M2.2
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
+    techniques: [T1053.002]
+    tactic: persistence
+
+  # --- M2.3 Privileged identities ---
+  - id: USER_ACCOUNT_ANOMALY
+    macro: M2
+    micro: M2.3
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1136.001]
+    tactic: persistence
+  - id: USER_PRIV_GROUP_ADD
+    macro: M2
+    micro: M2.3
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1098]
+    tactic: persistence
+  - id: USER_SHELL_ENABLED
+    macro: M2
+    micro: M2.3
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1136.001]
+    tactic: persistence
+  - id: USER_PASSWD_HASH_CHANGE
+    macro: M2
+    micro: M2.3
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
+    techniques: [T1098]
+    tactic: persistence
+  - id: SUDOERS_PERSISTENCE
+    macro: M2
+    micro: M2.3
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1548.003]
+    tactic: privilege-escalation
+  - id: PAM_PERSISTENCE
+    macro: M2
+    micro: M2.3
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1556.003]
+    tactic: credential-access
+  - id: PAM_CONFIG_PROFILE_NEW
+    macro: M2
+    micro: M2.3
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1556.003]
+    tactic: credential-access
+  - id: PAM_MODULE_UNPACKAGED
+    macro: M2
+    micro: M2.3
+    src: INVENTORY
+    type: DELTA
+    conf: HIGH
+    techniques: [T1556.003]
+    tactic: credential-access
+  - id: NSS_CONFIG_CHANGE
+    macro: M2
+    micro: M2.3
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1556]
+    tactic: credential-access
+
+  # --- M2.4 Ubuntu-specific persistence ---
+  - id: APT_HOOK_PERSISTENCE
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1546]
+    tactic: persistence
+  - id: DPKG_TRIGGER_HOOK
+    macro: M2
+    micro: M2.4
+    src: INVENTORY
+    type: DELTA
+    conf: HIGH
+    techniques: [T1546]
+    tactic: persistence
+  - id: MOTD_SCRIPT_NEW
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1546]
+    tactic: persistence
+  - id: PROFILE_HOOK
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
+    techniques: [T1546.004]
+    tactic: persistence
+  - id: ENVIRONMENT_FILE_CHANGE
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
+    techniques: [T1546]
+    tactic: persistence
+  - id: NETWORK_DISPATCHER_HOOK
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1546]
+    tactic: persistence
+  - id: UDEV_RUN_RULE
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1546]
+    tactic: persistence
+  - id: POLKIT_RULE_NEW
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1548]
+    tactic: privilege-escalation
+  - id: NEEDRESTART_HOOK
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1546]
+    tactic: persistence
+  - id: SNAP_DANGEROUS_INSTALL
+    macro: M2
+    micro: M2.4
+    src: EBPF-EXEC
+    type: EVENT
+    conf: HIGH
+    techniques: [T1204]
+    tactic: execution
+  - id: SNAP_HOOK_NEW
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
+    techniques: [T1546]
+    tactic: persistence
+  - id: RC_LOCAL_REVIVED
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1037.004]
+    tactic: persistence
+  - id: INITRAMFS_HOOK
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1542]
+    tactic: persistence
+  - id: GRUB_CMDLINE_CHANGE
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1542.003]
+    tactic: persistence
+  - id: XDG_AUTOSTART_NEW
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
+    techniques: [T1547.013]
+    tactic: persistence
+
+  # --- M3.1 Loader / library injection ---
+  - id: LD_SO_PRELOAD_FILE
+    macro: M3
+    micro: M3.1
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1574.006]
+    tactic: defense-evasion
+  - id: PROC_LD_PRELOAD_ENV
+    macro: M3
+    micro: M3.1
+    src: PROCSCAN
+    type: STATE
+    conf: MEDIUM
+    techniques: [T1574.006]
+    tactic: defense-evasion
+  - id: LD_SO_CONF_CHANGED
+    macro: M3
+    micro: M3.1
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1574.006]
+    tactic: defense-evasion
+  - id: LIB_UNPACKAGED_SO
+    macro: M3
+    micro: M3.1
+    src: INVENTORY
+    type: DELTA
+    conf: HIGH
+    techniques: [T1574.006]
+    tactic: defense-evasion
+  - id: LIB_HASH_MISMATCH
+    macro: M3
+    micro: M3.1
+    src: INVENTORY
+    type: DELTA
+    conf: HIGH
+    techniques: [T1036, T1574.006]
+    tactic: defense-evasion
+  - id: PROC_MAPPED_UNPACKAGED_LIB
+    macro: M3
+    micro: M3.1
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
+    techniques: [T1574.006, T1055]
+    tactic: defense-evasion
+
+  # --- M3.2 Privileged execution ---
+  - id: SUID_INVENTORY_DELTA
+    macro: M3
+    micro: M3.2
+    src: INVENTORY
+    type: DELTA
+    conf: MEDIUM
+    techniques: [T1548.001]
+    tactic: privilege-escalation
+  - id: SUID_UNPACKAGED
+    macro: M3
+    micro: M3.2
+    src: INVENTORY
+    type: DELTA
+    conf: HIGH
+    techniques: [T1548.001]
+    tactic: privilege-escalation
+  - id: SUID_IN_WRITABLE_PATH
+    macro: M3
+    micro: M3.2
+    src: INVENTORY
+    type: DELTA
+    conf: HIGH
+    techniques: [T1548.001]
+    tactic: privilege-escalation
+  - id: FILE_CAPABILITY_DELTA
+    macro: M3
+    micro: M3.2
+    src: INVENTORY
+    type: DELTA
+    conf: HIGH
+    techniques: [T1548.001]
+    tactic: privilege-escalation
+  - id: PROC_CAP_ESCALATION
+    macro: M3
+    micro: M3.2
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
+    techniques: [T1548.001, T1068]
+    tactic: privilege-escalation
+    desc: Non-bhv capability escalation mapped under M3.2
+  - id: PROC_SUDDEN_ROOT
+    macro: M3
+    micro: M3.2
+    src: EBPF-EXEC
+    type: EVENT
+    conf: HIGH
+    techniques: [T1068]
+    tactic: privilege-escalation
+  - id: GTFOBIN_EXEC
+    macro: M3
+    micro: M3.2
+    src: EBPF-EXEC
+    type: EVENT
+    conf: MEDIUM
+    techniques: [T1548.001]
+    tactic: privilege-escalation
+  - id: USERNS_UNPRIV_CREATE
+    macro: M3
+    micro: M3.2
+    src: EBPF-EXEC
+    type: EVENT
+    conf: MEDIUM
+    techniques: [T1611]
+    tactic: privilege-escalation
+  - id: CVE_2026_31431_AF_ALG_AEAD
+    macro: M3
+    micro: M3.2
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    techniques: [T1068]
+    tactic: privilege-escalation
+  - id: CVE_2026_31431_PAGE_CACHE_POISONING
+    macro: M3
+    micro: M3.2
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
+    techniques: [T1068, T1014]
+    tactic: privilege-escalation
+
+  # --- M3.3 Defense weakening ---
+  - id: APPARMOR_PROFILE_DISABLED
+    macro: M3
+    micro: M3.3
+    src: FIM
+    type: EVENT
+    conf: HIGH
+    techniques: [T1562.001]
+    tactic: defense-evasion
+  - id: APPARMOR_COMPLAIN_MODE
+    macro: M3
+    micro: M3.3
+    src: EBPF-EXEC
+    type: EVENT
+    conf: HIGH
+    techniques: [T1562.001]
+    tactic: defense-evasion
+  - id: APPARMOR_USERNS_RESTRICT_OFF
+    macro: M3
+    micro: M3.3
+    src: AUDIT
+    type: DELTA
+    conf: HIGH
+    techniques: [T1562.001]
+    tactic: defense-evasion
+  - id: SYSCTL_HARDENING_OFF
+    macro: M3
+    micro: M3.3
+    src: AUDIT
+    type: DELTA
+    conf: HIGH
+    techniques: [T1562.001]
+    tactic: defense-evasion
+  - id: AUDITD_TAMPER
+    macro: M3
+    micro: M3.3
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    techniques: [T1562.001]
+    tactic: defense-evasion
+  - id: FIREWALL_FLUSH
+    macro: M3
+    micro: M3.3
+    src: EBPF-EXEC
+    type: EVENT
+    conf: MEDIUM
+    techniques: [T1562.004]
+    tactic: defense-evasion
+  - id: SECURITY_SERVICE_STOP
+    macro: M3
+    micro: M3.3
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    techniques: [T1562.001]
+    tactic: defense-evasion
+  - id: KERNEL_MODULE_LOAD
+    macro: M3
+    micro: M3.3
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    techniques: [T1547.006, T1014]
+    tactic: persistence
+  - id: KERNEL_MODULE_NEW
+    macro: M3
+    micro: M3.3
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1547.006]
+    tactic: persistence
+  - id: KERNEL_MODLOAD_PATH_CHANGED
+    macro: M3
+    micro: M3.3
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
+    techniques: [T1547.006]
+    tactic: persistence
+  - id: EBPF_PROGRAM_LOAD
+    macro: M3
+    micro: M3.3
+    src: AUDIT
+    type: EVENT
+    conf: MEDIUM
+    techniques: [T1014]
+    tactic: defense-evasion
+  - id: AGENT_TAMPERED
+    macro: M3
+    micro: M3.3
+    src: FIM
+    type: EVENT
+    conf: HIGH
+    techniques: [T1562.001]
+    tactic: defense-evasion
+    desc: Non-bhv agent self-guard mapped under defense weakening
+
+  # --- M4.1 Fileless / anti-forensic ---
+  - id: PROC_DELETED_EXEC_SEGMENT
+    macro: M4
+    micro: M4.1
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
+    techniques: [T1055, T1070.004]
+    tactic: defense-evasion
+  - id: PROC_MEMFD_EXEC
+    macro: M4
+    micro: M4.1
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
+    techniques: [T1620]
+    tactic: defense-evasion
+  - id: PROC_RWX_MEMORY_SEGMENT
+    macro: M4
+    micro: M4.1
+    src: PROCSCAN
+    type: STATE
+    conf: MEDIUM
+    techniques: [T1055]
+    tactic: defense-evasion
+  - id: PROC_WRITABLE_PATH_MAP
+    macro: M4
+    micro: M4.1
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
+    techniques: [T1055]
+    tactic: defense-evasion
+  - id: PROC_UNEXPECTED_TRACER
+    macro: M4
+    micro: M4.1
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
+    techniques: [T1055]
+    tactic: defense-evasion
+  - id: PROC_PTRACE_INJECT
+    macro: M4
+    micro: M4.1
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    techniques: [T1055]
+    tactic: defense-evasion
+  - id: PROC_MASQUERADE_NAME
+    macro: M4
+    micro: M4.1
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
+    techniques: [T1036.005]
+    tactic: defense-evasion
+  - id: PROC_HIDDEN_PID
+    macro: M4
+    micro: M4.1
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
+    techniques: [T1014]
+    tactic: defense-evasion
+  - id: EXEC_FROM_TMPFS
+    macro: M4
+    micro: M4.1
+    src: EBPF-EXEC
+    type: EVENT
+    conf: MEDIUM
+    techniques: [T1036]
+    tactic: defense-evasion
+  - id: YARA_PROCESS_MATCH
+    macro: M4
+    micro: M4.1
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
+    techniques: [T1055, T1204.002]
+    tactic: defense-evasion
+
+  # --- M4.2 Log / timestamp manipulation ---
+  - id: JOURNAL_VACUUM
+    macro: M4
+    micro: M4.2
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    techniques: [T1070.002]
+    tactic: defense-evasion
+  - id: LOG_TRUNCATE
+    macro: M4
+    micro: M4.2
+    src: FIM
+    type: EVENT
+    conf: HIGH
+    techniques: [T1070.002]
+    tactic: defense-evasion
+  - id: SHELL_HISTORY_TAMPER
+    macro: M4
+    micro: M4.2
+    src: FIM
+    type: EVENT
+    conf: MEDIUM
+    techniques: [T1070.003]
+    tactic: defense-evasion
+  - id: TIMESTOMP_INCONSISTENCY
+    macro: M4
+    micro: M4.2
+    src: FIM
+    type: STATE
+    conf: MEDIUM
+    techniques: [T1070.006]
+    tactic: defense-evasion
+  - id: RSYSLOG_CONFIG_TAMPER
+    macro: M4
+    micro: M4.2
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    techniques: [T1562.002]
+    tactic: defense-evasion
+
+  # --- M5 Credential access ---
+  - id: SHADOW_READ_ANOMALY
+    macro: M5
+    micro: M5.1
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    techniques: [T1003.008]
+    tactic: credential-access
+  - id: SSH_PRIVKEY_ACCESS
+    macro: M5
+    micro: M5.1
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    techniques: [T1552.004]
+    tactic: credential-access
+  - id: SSH_AGENT_SOCKET_ABUSE
+    macro: M5
+    micro: M5.1
+    src: EBPF-NET
+    type: EVENT
+    conf: HIGH
+    techniques: [T1552.004]
+    tactic: credential-access
+  - id: CLOUD_CRED_FILE_ACCESS
+    macro: M5
+    micro: M5.1
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    techniques: [T1552.001, T1552.005]
+    tactic: credential-access
+  - id: APP_SECRET_HARVEST
+    macro: M5
+    micro: M5.1
+    src: AUDIT
+    type: EVENT
+    conf: MEDIUM
+    techniques: [T1552.001]
+    tactic: credential-access
+  - id: PROC_MEM_READ_CROSS_UID
+    macro: M5
+    micro: M5.1
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    techniques: [T1003]
+    tactic: credential-access
+  - id: CRED_MASS_FILE_ACCESS
+    macro: M5
+    micro: M5.1
+    src: AUDIT
+    type: EVENT
+    conf: MEDIUM
+    techniques: [T1552.001]
+    tactic: credential-access
+
+  # --- M6 Container escape ---
+  - id: CONTAINER_SOCKET_ACCESS
+    macro: M6
+    micro: M6.1
+    src: EBPF-FILE
+    type: EVENT
+    conf: HIGH
+    techniques: [T1609]
+    tactic: privilege-escalation
+  - id: CONTAINER_HOST_MOUNT
+    macro: M6
+    micro: M6.1
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    techniques: [T1611]
+    tactic: privilege-escalation
+  - id: RUNC_SELF_EXE_WRITE
+    macro: M6
+    micro: M6.1
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    techniques: [T1611]
+    tactic: privilege-escalation
+  - id: CGROUP_RELEASE_AGENT_WRITE
+    macro: M6
+    micro: M6.1
+    src: EBPF-FILE
+    type: EVENT
+    conf: HIGH
+    techniques: [T1611]
+    tactic: privilege-escalation
+  - id: CONTAINER_PRIVILEGED_START
+    macro: M6
+    micro: M6.1
+    src: EBPF-EXEC
+    type: EVENT
+    conf: MEDIUM
+    techniques: [T1610]
+    tactic: privilege-escalation
+  - id: LXD_HOST_DISK_ATTACH
+    macro: M6
+    micro: M6.1
+    src: EBPF-EXEC
+    type: EVENT
+    conf: HIGH
+    techniques: [T1611]
+    tactic: privilege-escalation
+  - id: NS_ESCAPE_SETNS
+    macro: M6
+    micro: M6.1
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    techniques: [T1611]
+    tactic: privilege-escalation
+
+chains:
+  - id: CHAIN-1
+    window: 30m
+    score: CRITICAL
+    steps:
+      - [WEB_DOCROOT_EXEC_WRITE]
+      - [WEB_WORKER_SHELL_CHILD, WEB_WORKER_INTERP_CHILD]
+      - [WEB_WORKER_DOWNLOADER_CHILD, NETWORK_LISTEN_NEW]
+      - [CRON_HIGH_RISK, SYSTEMD_PERSISTENCE, SSH_AUTHKEY_NEW]
+  - id: CHAIN-2
+    window: 10m
+    score: CRITICAL
+    steps:
+      - [WEB_WORKER_INTERP_CHILD]
+      - [NETWORK_IMDS_ACCESS]
+      - [CLOUD_CRED_FILE_ACCESS, NETWORK_WEB_WORKER_EGRESS]
+  - id: CHAIN-3
+    window: 15m
+    score: CRITICAL
+    steps:
+      - [PROC_SUDDEN_ROOT, GTFOBIN_EXEC, SUID_UNPACKAGED]
+      - [USER_PRIV_GROUP_ADD, SUDOERS_PERSISTENCE, PAM_CONFIG_PROFILE_NEW]
+  - id: CHAIN-4
+    window: 20m
+    score: CRITICAL
+    steps:
+      - [SYSCTL_HARDENING_OFF, APPARMOR_PROFILE_DISABLED, AUDITD_TAMPER]
+      - [PROC_UNEXPECTED_TRACER, PROC_MEM_READ_CROSS_UID, KERNEL_MODULE_LOAD]
+  - id: CHAIN-5
+    window: 10m
+    score: CRITICAL
+    steps:
+      - [CONTAINER_SOCKET_ACCESS, LXD_HOST_DISK_ATTACH]
+      - [NS_ESCAPE_SETNS, CONTAINER_HOST_MOUNT]
+  - id: CHAIN-6
+    window: 60m
+    score: CRITICAL
+    flag: evidence_loss
+    steps:
+      - []  # any HIGH nano (handled in correlator)
+      - [JOURNAL_VACUUM, LOG_TRUNCATE, SHELL_HISTORY_TAMPER, TIMESTOMP_INCONSISTENCY]

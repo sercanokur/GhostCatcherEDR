@@ -79,8 +79,8 @@ func newEngine(ssh *sshClient, term *termHub, target string) *demoEngine {
 		},
 		{
 			ID: "reverse_shell", Index: 4, Title: "Act 3 — Reverse shell",
-			Narration: "bash /dev/tcp reverse shell on the host (self-listener). Expect NETWORK_REVERSE_SHELL.",
-			RuleIDs:   []string{"NETWORK_REVERSE_SHELL"},
+			Narration: "bash /dev/tcp reverse shell on the host (self-listener). Expect PROC_SOCKET_STDIO.",
+			RuleIDs:   []string{"PROC_SOCKET_STDIO"},
 			RemoteCmd: "bash /opt/ghostcatcher-lab/killchain/04-reverse-shell.sh",
 			WaitSecs:  90, ExpectRules: true,
 		},

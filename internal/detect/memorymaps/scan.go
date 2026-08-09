@@ -1,6 +1,7 @@
 package memorymaps
 
 import (
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -15,10 +16,11 @@ import (
 const (
 	RuleProcRWX           = "PROC_RWX_MEMORY_SEGMENT"
 	RuleProcDeletedExec   = "PROC_DELETED_EXEC_SEGMENT"
-	RuleProcWorldWritable = "PROC_WORLD_WRITABLE_MAPPING"
+	RuleProcWorldWritable = "PROC_WRITABLE_PATH_MAP"
 	RuleProcTracer        = "PROC_UNEXPECTED_TRACER"
-	RuleProcSuspectLib    = "PROC_UNEXPECTED_LIBRARY"
+	RuleProcSuspectLib    = "PROC_MAPPED_UNPACKAGED_LIB"
 	RuleProcCapEscalation = "PROC_CAP_ESCALATION"
+	RuleProcMasquerade    = "PROC_MASQUERADE_NAME"
 )
 
 // Scan inspects /proc/[pid]/maps and /proc/[pid]/status for the configured
@@ -106,9 +108,32 @@ func Scan(cfg *config.Config, snap *baseline.Snapshot, pack *rules.Pack, agentVe
 					[]string{"effective_caps_all_bits", "comm:" + comm, "cap_eff:" + st.CapEff},
 					[]string{"T1548", "T1055"}, now, agentVer, cfg, pack, learning))
 			}
+			exe := procfs.ResolveExe(pid)
+			if masqueradeName(comm, exe) {
+				events = append(events, emitMapEvent(RuleProcMasquerade, pid, comm, exe,
+					[]string{"proc_masquerade_name", "comm:" + comm, "exe:" + exe},
+					[]string{"T1036.005"}, now, agentVer, cfg, pack, false))
+			}
 		}
 	}
 	return events, nil
+}
+
+func masqueradeName(comm, exe string) bool {
+	if comm == "" || exe == "" {
+		return false
+	}
+	// Kernel-thread impersonation: [kworker/...] while exe exists.
+	if strings.HasPrefix(comm, "[") && strings.HasSuffix(comm, "]") && exe != "" && !strings.Contains(exe, "(deleted)") {
+		return true
+	}
+	base := filepath.Base(exe)
+	if base == "" {
+		return false
+	}
+	// Strip (deleted) suffix noise.
+	base = strings.TrimSuffix(base, " (deleted)")
+	return !strings.EqualFold(comm, base) && !strings.HasPrefix(base, comm)
 }
 
 // capLooksEscalated reports true when the effective caps bitmask is "looks

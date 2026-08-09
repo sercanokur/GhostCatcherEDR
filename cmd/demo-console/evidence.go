@@ -64,7 +64,7 @@ func humanRuleTitle(ruleID string) string {
 		return "ld.so.preload persistence"
 	case "SSH_AUTHKEY_NEW":
 		return "New SSH authorized key"
-	case "NETWORK_REVERSE_SHELL":
+	case "PROC_SOCKET_STDIO":
 		return "Reverse shell / C2"
 	default:
 		return ruleID
@@ -90,7 +90,7 @@ func humanSummary(ruleID string, src map[string]any) string {
 			user = str(ent["user"])
 		}
 		return fmt.Sprintf("New SSH key added for user %s.", user)
-	case "NETWORK_REVERSE_SHELL":
+	case "PROC_SOCKET_STDIO":
 		return fmt.Sprintf("Shell process opened outbound C2-like connection: %s", firstLine(evd))
 	default:
 		return firstLine(evd)

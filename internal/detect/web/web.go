@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"ghostcatcher/internal/anchor"
 	"ghostcatcher/internal/baseline"
 	"ghostcatcher/internal/config"
 	"ghostcatcher/internal/event"
@@ -111,17 +112,31 @@ func evaluateWebFile(
 	newOrChanged := !inBase || rec.SHA256 != hash
 
 	matched := matchingPatterns(string(data))
+	hasExec, hasInput, hasObfusc := classifyPatternCategories(matched)
 	ent := shannonEntropy(data)
 	fa := readFileAttributes(st)
 	phpTaint, phpSink := false, ""
 	if strings.HasSuffix(strings.ToLower(path), ".php") || strings.HasSuffix(strings.ToLower(path), ".phar") || strings.HasSuffix(strings.ToLower(path), ".phtml") {
 		phpTaint, phpSink = scanPHPTaintFlow(string(data))
 	}
+	if phpTaint {
+		hasExec = true
+		hasInput = true
+	}
 
 	// Aggregate signals before deciding severity tier.
 	var sigs []string
 	if len(matched) > 0 {
 		sigs = append(sigs, "suspicious_web_pattern:"+strings.Join(matched, ","))
+	}
+	if hasExec {
+		sigs = append(sigs, "exec_primitive")
+	}
+	if hasInput {
+		sigs = append(sigs, "input_channel")
+	}
+	if hasObfusc {
+		sigs = append(sigs, "obfuscation_booster")
 	}
 	if phpTaint {
 		sigs = append(sigs, "php_taint_flow:"+phpSink)
@@ -164,13 +179,24 @@ func evaluateWebFile(
 	if len(sigs) == 0 {
 		return event.Event{}, false
 	}
+	// bhv.md: never fire standalone "contains base64" — require execution
+	// primitive + input channel (obfuscation is only a score booster).
+	bhvCombo := (hasExec && hasInput) || phpTaint
+	if !bhvCombo && !polyglot {
+		// Obfuscation-only / entropy-only stays learning or silent.
+		if !hasExec || !hasInput {
+			if hasObfusc || ent >= entropyThreshold {
+				return event.Event{}, false
+			}
+		}
+	}
 	// Baseline-matched files without content match only report if polyglot/entropy/taint.
 	if len(matched) == 0 && !polyglot && ent < entropyThreshold && !phpTaint {
 		return event.Event{}, false
 	}
 
 	// After baseline commit, a recent mtime alone is not escalation-worthy.
-	high := (len(matched) > 0 || phpTaint) && (childSig || newOrChanged || polyglot ||
+	high := bhvCombo && (childSig || newOrChanged || polyglot ||
 		(!snap.IsCommitted() && recent))
 
 	tech := []string{"T1505.003"}
@@ -265,6 +291,11 @@ func findWebWorkerPIDs(cfg *config.Config) map[int]struct{} {
 		want[strings.ToLower(n)] = struct{}{}
 	}
 	for _, pid := range pids {
+		ainfo := anchor.FromPID(pid)
+		if anchor.IsWatchedUnit(ainfo.SystemdUnit, cfg.WatchedUnits) {
+			out[pid] = struct{}{}
+			continue
+		}
 		comm, err := procfs.Comm(pid)
 		if err != nil {
 			continue

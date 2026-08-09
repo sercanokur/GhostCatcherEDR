@@ -36,19 +36,23 @@ rules:
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `id` | string | yes | Stable identifier emitted as `rule_id`. |
-| `technique` | string | yes | MITRE ATT&CK ID, emitted as `technique_id`. |
-| `tactic` | string | no | Free-form tactic label. |
-| `severity` | enum | yes | `info` / `low` / `medium` / `high` / `critical`. |
-| `base_confidence` | int | yes | Starting confidence applied to the event before signal weights. |
-| `min_signals` | int | yes | Minimum number of named signals needed before the rule produces an event. |
-| `weights` | map | no | Per-signal confidence contribution. Missing signals contribute zero. |
-| `expr` | string | no | Boolean expression evaluated after weights; if false the event is downgraded to `learning_only`. |
-| `correlate` | list | no | Peer rule IDs that, if seen on the same entity inside `correlate_window`, contribute `correlate_boost`. |
+| `id` | string | yes | Stable identifier emitted as `rule_id` (bhv nano ID). |
+| `techniques` | list | yes | MITRE ATT&CK technique IDs. |
+| `tactic` | string | no | ATT&CK tactic slug. |
+| `macro` / `micro` | string | no | bhv taxonomy; filled from `mapping.yaml` when empty. |
+| `src` | string | no | Telemetry source (`EBPF-EXEC`, `FIM`, `AUDIT`, …). |
+| `type` | string | no | `EVENT` \| `DELTA` \| `STATE`. |
+| `conf` | string | no | Standalone band `HIGH` \| `MEDIUM` \| `LOW`. |
+| `min_signals` | int | yes | Minimum number of named signals needed before scoring. |
+| `base_score` / `per_signal_bonus` / `cap_score` | int | no | Confidence scoring knobs. |
+| `expr` | string | no | Boolean expression; if false the event is downgraded to `learning_only`. |
+| `correlate` | list | no | Peer rule IDs that, if seen on the same **anchor**/entity inside `correlate_window`, contribute `correlate_boost`. |
 | `correlate_window` | duration | no | Go duration string (`30s`, `5m`, `1h`). Default `5m` if `correlate` is set. |
 | `correlate_boost` | int | no | Confidence delta added on a correlated hit. Default `10`. |
-| `dedup_window` | duration | no | Per-entity dedup. Defaults to `scan_interval`. |
-| `learning_only` | bool | no | Force the rule to never alert; useful when staging a new detection. |
+| `kill_chain_phase` | string | no | Overrides tactic-derived Lockheed phase. |
+| `response.action` | string | no | Preferred OODA Act (`alert_only`, `quarantine_file`, `kill_process`, `isolate_host`). |
+
+The full nano catalog and CHAIN-1…6 definitions live in [`configs/mapping.yaml`](../../configs/mapping.yaml). Events are schema **1.3** (`macro`, `micro`, `src`, `type`, `anchor`, `conf_band`, `chain_id`, `evidence_loss`).
 
 ## Expression language
 

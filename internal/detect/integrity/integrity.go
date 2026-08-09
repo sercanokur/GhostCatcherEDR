@@ -13,9 +13,12 @@ import (
 )
 
 const (
-	RuleBinaryMD5Mismatch = "BINARY_INTEGRITY_MD5_MISMATCH"
+	RuleBinaryMD5Mismatch = "LIB_HASH_MISMATCH"
 	RuleSUIDAnomaly       = "SUID_INVENTORY_DELTA"
+	RuleSUIDUnpackaged    = "SUID_UNPACKAGED"
+	RuleSUIDWritablePath  = "SUID_IN_WRITABLE_PATH"
 	RuleCapabilityAnomaly = "FILE_CAPABILITY_DELTA"
+	RuleLibUnpackaged     = "LIB_UNPACKAGED_SO"
 )
 
 // distro describes the packaging backend to use for integrity verification.

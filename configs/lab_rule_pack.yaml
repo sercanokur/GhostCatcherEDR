@@ -1,18 +1,30 @@
-# Kapsam: ghostcatcher/internal/detect/* içindeki tüm RuleID'ler (lab / demo).
-# Production için configs/rule_pack.example.yaml kullanın; bu dosya tüm
-# tespitlerin güven skoruna sahip olması içindir.
-version: "1.2.0-lab"
+# Kapsam: bhv.md Macro→Micro→Nano + lab detectors.
+# Generated/merged from configs/mapping.yaml
+version: "2.0.0-lab"
 rules:
   - id: SSH_AUTHKEY_NEW
     techniques: [T1098.004]
     tactic: persistence
+    macro: M2
+    micro: M2.1
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
     min_signals: 1
     base_score: 75
     per_signal_bonus: 12
     cap_score: 100
+    correlate: [WEB_WORKER_SHELL_CHILD, WEB_DOCROOT_EXEC_WRITE]
+    correlate_window: 30m
+    correlate_boost: 20
   - id: SSH_AUTHKEY_INVALID_LINE
     techniques: [T1098.004]
     tactic: persistence
+    macro: M2
+    micro: M2.1
+    src: FIM
+    type: STATE
+    conf: HIGH
     min_signals: 1
     base_score: 55
     per_signal_bonus: 10
@@ -20,13 +32,26 @@ rules:
   - id: CRON_HIGH_RISK
     techniques: [T1053.003]
     tactic: persistence
+    macro: M2
+    micro: M2.2
+    src: FIM
+    type: DELTA
+    conf: HIGH
     min_signals: 1
     base_score: 60
     per_signal_bonus: 15
     cap_score: 100
+    correlate: [WEB_WORKER_SHELL_CHILD, WEB_WORKER_INTERP_CHILD, WEB_DOCROOT_EXEC_WRITE]
+    correlate_window: 30m
+    correlate_boost: 20
   - id: LD_SO_PRELOAD_FILE
     techniques: [T1574.006, T1014]
     tactic: defense-evasion
+    macro: M3
+    micro: M3.1
+    src: FIM
+    type: DELTA
+    conf: HIGH
     min_signals: 1
     base_score: 95
     per_signal_bonus: 5
@@ -34,6 +59,11 @@ rules:
   - id: PROC_LD_PRELOAD_ENV
     techniques: [T1574.006, T1014]
     tactic: defense-evasion
+    macro: M3
+    micro: M3.1
+    src: PROCSCAN
+    type: STATE
+    conf: MEDIUM
     min_signals: 1
     base_score: 70
     per_signal_bonus: 12
@@ -41,6 +71,11 @@ rules:
   - id: WEB_SHELL_PATTERN
     techniques: [T1505.003, T1059.004]
     tactic: persistence
+    macro: M1
+    micro: M1.1
+    src: FIM
+    type: STATE
+    conf: MEDIUM
     min_signals: 2
     base_score: 55
     per_signal_bonus: 15
@@ -48,6 +83,11 @@ rules:
   - id: PROC_RWX_MEMORY_SEGMENT
     techniques: [T1055, T1505.003]
     tactic: defense-evasion
+    macro: M4
+    micro: M4.1
+    src: PROCSCAN
+    type: STATE
+    conf: MEDIUM
     min_signals: 1
     base_score: 80
     per_signal_bonus: 10
@@ -55,13 +95,23 @@ rules:
   - id: PROC_DELETED_EXEC_SEGMENT
     techniques: [T1055, T1095]
     tactic: defense-evasion
+    macro: M4
+    micro: M4.1
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
     min_signals: 1
     base_score: 80
     per_signal_bonus: 10
     cap_score: 100
-  - id: PROC_WORLD_WRITABLE_MAPPING
+  - id: PROC_WRITABLE_PATH_MAP
     techniques: [T1055, T1083]
     tactic: defense-evasion
+    macro: M4
+    micro: M4.1
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
     min_signals: 1
     base_score: 70
     per_signal_bonus: 10
@@ -69,13 +119,26 @@ rules:
   - id: PROC_UNEXPECTED_TRACER
     techniques: [T1055, T1012]
     tactic: defense-evasion
+    macro: M4
+    micro: M4.1
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
     min_signals: 1
     base_score: 75
     per_signal_bonus: 10
     cap_score: 100
-  - id: PROC_UNEXPECTED_LIBRARY
+    correlate: [SYSCTL_HARDENING_OFF, APPARMOR_PROFILE_DISABLED, AUDITD_TAMPER]
+    correlate_window: 20m
+    correlate_boost: 25
+  - id: PROC_MAPPED_UNPACKAGED_LIB
     techniques: [T1055, T1553]
     tactic: defense-evasion
+    macro: M3
+    micro: M3.1
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
     min_signals: 1
     base_score: 70
     per_signal_bonus: 10
@@ -83,6 +146,11 @@ rules:
   - id: PROC_CAP_ESCALATION
     techniques: [T1055, T1068]
     tactic: privilege-escalation
+    macro: M3
+    micro: M3.2
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
     min_signals: 1
     base_score: 75
     per_signal_bonus: 10
@@ -90,6 +158,11 @@ rules:
   - id: PROC_SUDDEN_ROOT
     techniques: [T1068]
     tactic: privilege-escalation
+    macro: M3
+    micro: M3.2
+    src: EBPF-EXEC
+    type: EVENT
+    conf: HIGH
     kill_chain_phase: exploitation
     min_signals: 1
     base_score: 80
@@ -97,9 +170,14 @@ rules:
     cap_score: 100
     response:
       action: alert_only
-  - id: BINARY_INTEGRITY_MD5_MISMATCH
+  - id: LIB_HASH_MISMATCH
     techniques: [T1036, T1574.006]
     tactic: defense-evasion
+    macro: M3
+    micro: M3.1
+    src: INVENTORY
+    type: DELTA
+    conf: HIGH
     min_signals: 1
     base_score: 85
     per_signal_bonus: 5
@@ -107,6 +185,11 @@ rules:
   - id: SUID_INVENTORY_DELTA
     techniques: [T1548.001, T1055]
     tactic: privilege-escalation
+    macro: M3
+    micro: M3.2
+    src: INVENTORY
+    type: DELTA
+    conf: MEDIUM
     min_signals: 1
     base_score: 85
     per_signal_bonus: 10
@@ -114,6 +197,11 @@ rules:
   - id: FILE_CAPABILITY_DELTA
     techniques: [T1548.001]
     tactic: privilege-escalation
+    macro: M3
+    micro: M3.2
+    src: INVENTORY
+    type: DELTA
+    conf: HIGH
     min_signals: 1
     base_score: 80
     per_signal_bonus: 10
@@ -121,6 +209,11 @@ rules:
   - id: WEB_WORKER_RECON_CHILD
     techniques: [T1059.004, T1505.003]
     tactic: execution
+    macro: M1
+    micro: M1.2
+    src: EBPF-EXEC
+    type: EVENT
+    conf: HIGH
     min_signals: 1
     base_score: 72
     per_signal_bonus: 12
@@ -128,6 +221,11 @@ rules:
   - id: PAM_PERSISTENCE
     techniques: [T1556.003]
     tactic: credential-access
+    macro: M2
+    micro: M2.3
+    src: FIM
+    type: DELTA
+    conf: HIGH
     min_signals: 1
     base_score: 70
     per_signal_bonus: 12
@@ -135,6 +233,11 @@ rules:
   - id: USER_ACCOUNT_ANOMALY
     techniques: [T1136.001, T1078.001]
     tactic: persistence
+    macro: M2
+    micro: M2.3
+    src: FIM
+    type: DELTA
+    conf: HIGH
     min_signals: 1
     base_score: 70
     per_signal_bonus: 12
@@ -142,6 +245,11 @@ rules:
   - id: LD_SO_CONF_CHANGED
     techniques: [T1574.006]
     tactic: defense-evasion
+    macro: M3
+    micro: M3.1
+    src: FIM
+    type: DELTA
+    conf: HIGH
     min_signals: 1
     base_score: 60
     per_signal_bonus: 10
@@ -149,6 +257,11 @@ rules:
   - id: KERNEL_MODULE_NEW
     techniques: [T1014, T1218]
     tactic: defense-evasion
+    macro: M3
+    micro: M3.3
+    src: FIM
+    type: DELTA
+    conf: HIGH
     min_signals: 1
     base_score: 70
     per_signal_bonus: 10
@@ -156,6 +269,11 @@ rules:
   - id: KERNEL_MODLOAD_PATH_CHANGED
     techniques: [T1014]
     tactic: defense-evasion
+    macro: M3
+    micro: M3.3
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
     min_signals: 1
     base_score: 65
     per_signal_bonus: 10
@@ -163,6 +281,11 @@ rules:
   - id: SSHD_CONFIG_ANOMALY
     techniques: [T1098.004, T1027]
     tactic: defense-evasion
+    macro: M2
+    micro: M2.1
+    src: FIM
+    type: DELTA
+    conf: HIGH
     min_signals: 1
     base_score: 70
     per_signal_bonus: 10
@@ -170,13 +293,26 @@ rules:
   - id: SUDOERS_PERSISTENCE
     techniques: [T1078, T1055.002]
     tactic: defense-evasion
+    macro: M2
+    micro: M2.3
+    src: FIM
+    type: DELTA
+    conf: HIGH
     min_signals: 1
     base_score: 80
     per_signal_bonus: 10
     cap_score: 100
-  - id: SHELL_RC_PERSISTENCE
+    correlate: [PROC_SUDDEN_ROOT, GTFOBIN_EXEC]
+    correlate_window: 15m
+    correlate_boost: 25
+  - id: PROFILE_HOOK
     techniques: [T1027, T1083]
     tactic: persistence
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
     min_signals: 1
     base_score: 60
     per_signal_bonus: 10
@@ -184,27 +320,50 @@ rules:
   - id: SYSTEMD_PERSISTENCE
     techniques: [T1053.006, T1543.003]
     tactic: persistence
+    macro: M2
+    micro: M2.2
+    src: FIM
+    type: DELTA
+    conf: HIGH
     min_signals: 1
     base_score: 75
     per_signal_bonus: 12
     cap_score: 100
+    correlate: [WEB_WORKER_SHELL_CHILD, WEB_WORKER_INTERP_CHILD]
+    correlate_window: 30m
+    correlate_boost: 20
   - id: PROC_RARE_ANCESTRY
     techniques: [T1059, T1505.003]
     tactic: execution
+    macro: M1
+    micro: M1.2
+    src: EBPF-EXEC
+    type: DELTA
+    conf: MEDIUM
     min_signals: 1
     base_score: 65
     per_signal_bonus: 10
     cap_score: 100
-  - id: NETWORK_REVERSE_SHELL
+  - id: PROC_SOCKET_STDIO
     techniques: [T1059.004, T1571]
     tactic: command-and-control
+    macro: M1
+    micro: M1.2
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
     min_signals: 1
     base_score: 85
     per_signal_bonus: 10
     cap_score: 100
-  - id: NETWORK_UNEXPECTED_LISTEN
+  - id: NETWORK_LISTEN_NEW
     techniques: [T1571, T1205.002]
     tactic: command-and-control
+    macro: M1
+    micro: M1.3
+    src: EBPF-NET
+    type: DELTA
+    conf: HIGH
     min_signals: 1
     base_score: 70
     per_signal_bonus: 10
@@ -212,13 +371,26 @@ rules:
   - id: NETWORK_WEB_WORKER_EGRESS
     techniques: [T1041, T1071.001]
     tactic: exfiltration
+    macro: M1
+    micro: M1.3
+    src: EBPF-NET
+    type: DELTA
+    conf: MEDIUM
     min_signals: 1
     base_score: 70
     per_signal_bonus: 10
     cap_score: 100
+    correlate: [NETWORK_IMDS_ACCESS, WEB_WORKER_INTERP_CHILD]
+    correlate_window: 10m
+    correlate_boost: 20
   - id: YARA_DISK_MATCH
     techniques: [T1204.002]
     tactic: execution
+    macro: M1
+    micro: M1.1
+    src: FIM
+    type: STATE
+    conf: HIGH
     min_signals: 1
     base_score: 80
     per_signal_bonus: 5
@@ -226,6 +398,11 @@ rules:
   - id: YARA_PROCESS_MATCH
     techniques: [T1204.002]
     tactic: execution
+    macro: M4
+    micro: M4.1
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
     min_signals: 1
     base_score: 80
     per_signal_bonus: 5
@@ -233,6 +410,11 @@ rules:
   - id: CVE_2026_31431_AF_ALG_AEAD
     techniques: [T1068]
     tactic: privilege-escalation
+    macro: M3
+    micro: M3.2
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
     min_signals: 1
     base_score: 90
     per_signal_bonus: 5
@@ -240,7 +422,1083 @@ rules:
   - id: CVE_2026_31431_PAGE_CACHE_POISONING
     techniques: [T1068, T1014]
     tactic: privilege-escalation
+    macro: M3
+    micro: M3.2
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
     min_signals: 1
     base_score: 95
     per_signal_bonus: 5
     cap_score: 100
+  - id: WEB_DOCROOT_EXEC_WRITE
+    techniques: [T1190, T1505.003]
+    tactic: persistence
+    macro: M1
+    micro: M1.1
+    src: EBPF-FILE
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "Process in a web service cgroup wrote interpretable content under docroot"
+  - id: WEB_APP_FILE_TAMPER
+    techniques: [T1505.003]
+    tactic: persistence
+    macro: M1
+    micro: M1.1
+    src: INVENTORY
+    type: DELTA
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "WEB_APP_FILE_TAMPER"
+  - id: WEB_UPLOAD_DIR_EXEC
+    techniques: [T1505.003]
+    tactic: persistence
+    macro: M1
+    micro: M1.1
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "WEB_UPLOAD_DIR_EXEC"
+  - id: WEB_WORKER_SHELL_CHILD
+    techniques: [T1059.004]
+    tactic: execution
+    macro: M1
+    micro: M1.2
+    src: EBPF-EXEC
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "WEB_WORKER_SHELL_CHILD"
+  - id: WEB_WORKER_INTERP_CHILD
+    techniques: [T1059.004, T1059.006]
+    tactic: execution
+    macro: M1
+    micro: M1.2
+    src: EBPF-EXEC
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "WEB_WORKER_INTERP_CHILD"
+  - id: WEB_WORKER_DOWNLOADER_CHILD
+    techniques: [T1105, T1059.004]
+    tactic: execution
+    macro: M1
+    micro: M1.2
+    src: EBPF-EXEC
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "WEB_WORKER_DOWNLOADER_CHILD"
+  - id: PROC_PTY_SPAWN
+    techniques: [T1059.004]
+    tactic: execution
+    macro: M1
+    micro: M1.2
+    src: EBPF-EXEC
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "PROC_PTY_SPAWN"
+  - id: NETWORK_IMDS_ACCESS
+    techniques: [T1552.005]
+    tactic: credential-access
+    macro: M1
+    micro: M1.3
+    src: EBPF-NET
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "NETWORK_IMDS_ACCESS"
+  - id: NETWORK_RAW_IP_NO_DNS
+    techniques: [T1071.001]
+    tactic: command-and-control
+    macro: M1
+    micro: M1.3
+    src: EBPF-NET
+    type: EVENT
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "NETWORK_RAW_IP_NO_DNS"
+  - id: NETWORK_BEACON_PERIODIC
+    techniques: [T1071.001]
+    tactic: command-and-control
+    macro: M1
+    micro: M1.3
+    src: EBPF-NET
+    type: STATE
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "NETWORK_BEACON_PERIODIC"
+  - id: SSHD_DROPIN_NEW
+    techniques: [T1098.004]
+    tactic: persistence
+    macro: M2
+    micro: M2.1
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "SSHD_DROPIN_NEW"
+  - id: SSHD_FORCED_COMMAND
+    techniques: [T1098.004]
+    tactic: persistence
+    macro: M2
+    micro: M2.1
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "SSHD_FORCED_COMMAND"
+  - id: SSH_RC_HOOK
+    techniques: [T1098.004]
+    tactic: persistence
+    macro: M2
+    micro: M2.1
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "SSH_RC_HOOK"
+  - id: SSH_SOCKET_OVERRIDE
+    techniques: [T1098.004]
+    tactic: persistence
+    macro: M2
+    micro: M2.1
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "SSH_SOCKET_OVERRIDE"
+  - id: SSH_HOSTKEY_CHANGE
+    techniques: [T1098.004]
+    tactic: persistence
+    macro: M2
+    micro: M2.1
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "SSH_HOSTKEY_CHANGE"
+  - id: CRON_SPOOL_CHANGE
+    techniques: [T1053.003]
+    tactic: persistence
+    macro: M2
+    micro: M2.2
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "CRON_SPOOL_CHANGE"
+  - id: CRON_DROPIN_NEW
+    techniques: [T1053.003]
+    tactic: persistence
+    macro: M2
+    micro: M2.2
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "CRON_DROPIN_NEW"
+  - id: CRON_RUNPARTS_EVASION
+    techniques: [T1053.003]
+    tactic: persistence
+    macro: M2
+    micro: M2.2
+    src: FIM
+    type: STATE
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "CRON_RUNPARTS_EVASION"
+  - id: SYSTEMD_USER_PERSISTENCE
+    techniques: [T1543.002]
+    tactic: persistence
+    macro: M2
+    micro: M2.2
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "SYSTEMD_USER_PERSISTENCE"
+  - id: SYSTEMD_GENERATOR_NEW
+    techniques: [T1543.002]
+    tactic: persistence
+    macro: M2
+    micro: M2.2
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "SYSTEMD_GENERATOR_NEW"
+  - id: SYSTEMD_DROPIN_OVERRIDE
+    techniques: [T1543.003]
+    tactic: persistence
+    macro: M2
+    micro: M2.2
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "SYSTEMD_DROPIN_OVERRIDE"
+  - id: AT_JOB_NEW
+    techniques: [T1053.002]
+    tactic: persistence
+    macro: M2
+    micro: M2.2
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "AT_JOB_NEW"
+  - id: USER_PRIV_GROUP_ADD
+    techniques: [T1098]
+    tactic: persistence
+    macro: M2
+    micro: M2.3
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    correlate: [PROC_SUDDEN_ROOT, GTFOBIN_EXEC, SUID_UNPACKAGED]
+    correlate_window: 15m
+    correlate_boost: 25
+    description: "USER_PRIV_GROUP_ADD"
+  - id: USER_SHELL_ENABLED
+    techniques: [T1136.001]
+    tactic: persistence
+    macro: M2
+    micro: M2.3
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "USER_SHELL_ENABLED"
+  - id: USER_PASSWD_HASH_CHANGE
+    techniques: [T1098]
+    tactic: persistence
+    macro: M2
+    micro: M2.3
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "USER_PASSWD_HASH_CHANGE"
+  - id: PAM_CONFIG_PROFILE_NEW
+    techniques: [T1556.003]
+    tactic: credential-access
+    macro: M2
+    micro: M2.3
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "PAM_CONFIG_PROFILE_NEW"
+  - id: PAM_MODULE_UNPACKAGED
+    techniques: [T1556.003]
+    tactic: credential-access
+    macro: M2
+    micro: M2.3
+    src: INVENTORY
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "PAM_MODULE_UNPACKAGED"
+  - id: NSS_CONFIG_CHANGE
+    techniques: [T1556]
+    tactic: credential-access
+    macro: M2
+    micro: M2.3
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "NSS_CONFIG_CHANGE"
+  - id: APT_HOOK_PERSISTENCE
+    techniques: [T1546]
+    tactic: persistence
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "APT_HOOK_PERSISTENCE"
+  - id: DPKG_TRIGGER_HOOK
+    techniques: [T1546]
+    tactic: persistence
+    macro: M2
+    micro: M2.4
+    src: INVENTORY
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "DPKG_TRIGGER_HOOK"
+  - id: MOTD_SCRIPT_NEW
+    techniques: [T1546]
+    tactic: persistence
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "MOTD_SCRIPT_NEW"
+  - id: ENVIRONMENT_FILE_CHANGE
+    techniques: [T1546]
+    tactic: persistence
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "ENVIRONMENT_FILE_CHANGE"
+  - id: NETWORK_DISPATCHER_HOOK
+    techniques: [T1546]
+    tactic: persistence
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "NETWORK_DISPATCHER_HOOK"
+  - id: UDEV_RUN_RULE
+    techniques: [T1546]
+    tactic: persistence
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "UDEV_RUN_RULE"
+  - id: POLKIT_RULE_NEW
+    techniques: [T1548]
+    tactic: privilege-escalation
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "POLKIT_RULE_NEW"
+  - id: NEEDRESTART_HOOK
+    techniques: [T1546]
+    tactic: persistence
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "NEEDRESTART_HOOK"
+  - id: SNAP_DANGEROUS_INSTALL
+    techniques: [T1204]
+    tactic: execution
+    macro: M2
+    micro: M2.4
+    src: EBPF-EXEC
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "SNAP_DANGEROUS_INSTALL"
+  - id: SNAP_HOOK_NEW
+    techniques: [T1546]
+    tactic: persistence
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "SNAP_HOOK_NEW"
+  - id: RC_LOCAL_REVIVED
+    techniques: [T1037.004]
+    tactic: persistence
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "RC_LOCAL_REVIVED"
+  - id: INITRAMFS_HOOK
+    techniques: [T1542]
+    tactic: persistence
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "INITRAMFS_HOOK"
+  - id: GRUB_CMDLINE_CHANGE
+    techniques: [T1542.003]
+    tactic: persistence
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "GRUB_CMDLINE_CHANGE"
+  - id: XDG_AUTOSTART_NEW
+    techniques: [T1547.013]
+    tactic: persistence
+    macro: M2
+    micro: M2.4
+    src: FIM
+    type: DELTA
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "XDG_AUTOSTART_NEW"
+  - id: LIB_UNPACKAGED_SO
+    techniques: [T1574.006]
+    tactic: defense-evasion
+    macro: M3
+    micro: M3.1
+    src: INVENTORY
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "LIB_UNPACKAGED_SO"
+  - id: SUID_UNPACKAGED
+    techniques: [T1548.001]
+    tactic: privilege-escalation
+    macro: M3
+    micro: M3.2
+    src: INVENTORY
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "SUID_UNPACKAGED"
+  - id: SUID_IN_WRITABLE_PATH
+    techniques: [T1548.001]
+    tactic: privilege-escalation
+    macro: M3
+    micro: M3.2
+    src: INVENTORY
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "SUID_IN_WRITABLE_PATH"
+  - id: GTFOBIN_EXEC
+    techniques: [T1548.001]
+    tactic: privilege-escalation
+    macro: M3
+    micro: M3.2
+    src: EBPF-EXEC
+    type: EVENT
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "GTFOBIN_EXEC"
+  - id: USERNS_UNPRIV_CREATE
+    techniques: [T1611]
+    tactic: privilege-escalation
+    macro: M3
+    micro: M3.2
+    src: EBPF-EXEC
+    type: EVENT
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "USERNS_UNPRIV_CREATE"
+  - id: APPARMOR_PROFILE_DISABLED
+    techniques: [T1562.001]
+    tactic: defense-evasion
+    macro: M3
+    micro: M3.3
+    src: FIM
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "APPARMOR_PROFILE_DISABLED"
+  - id: APPARMOR_COMPLAIN_MODE
+    techniques: [T1562.001]
+    tactic: defense-evasion
+    macro: M3
+    micro: M3.3
+    src: EBPF-EXEC
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "APPARMOR_COMPLAIN_MODE"
+  - id: APPARMOR_USERNS_RESTRICT_OFF
+    techniques: [T1562.001]
+    tactic: defense-evasion
+    macro: M3
+    micro: M3.3
+    src: AUDIT
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "APPARMOR_USERNS_RESTRICT_OFF"
+  - id: SYSCTL_HARDENING_OFF
+    techniques: [T1562.001]
+    tactic: defense-evasion
+    macro: M3
+    micro: M3.3
+    src: AUDIT
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "SYSCTL_HARDENING_OFF"
+  - id: AUDITD_TAMPER
+    techniques: [T1562.001]
+    tactic: defense-evasion
+    macro: M3
+    micro: M3.3
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "AUDITD_TAMPER"
+  - id: FIREWALL_FLUSH
+    techniques: [T1562.004]
+    tactic: defense-evasion
+    macro: M3
+    micro: M3.3
+    src: EBPF-EXEC
+    type: EVENT
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "FIREWALL_FLUSH"
+  - id: SECURITY_SERVICE_STOP
+    techniques: [T1562.001]
+    tactic: defense-evasion
+    macro: M3
+    micro: M3.3
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "SECURITY_SERVICE_STOP"
+  - id: KERNEL_MODULE_LOAD
+    techniques: [T1547.006, T1014]
+    tactic: persistence
+    macro: M3
+    micro: M3.3
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    correlate: [SYSCTL_HARDENING_OFF, AUDITD_TAMPER]
+    correlate_window: 20m
+    correlate_boost: 25
+    description: "KERNEL_MODULE_LOAD"
+  - id: EBPF_PROGRAM_LOAD
+    techniques: [T1014]
+    tactic: defense-evasion
+    macro: M3
+    micro: M3.3
+    src: AUDIT
+    type: EVENT
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "EBPF_PROGRAM_LOAD"
+  - id: AGENT_TAMPERED
+    techniques: [T1562.001]
+    tactic: defense-evasion
+    macro: M3
+    micro: M3.3
+    src: FIM
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "Non-bhv agent self-guard mapped under defense weakening"
+  - id: PROC_MEMFD_EXEC
+    techniques: [T1620]
+    tactic: defense-evasion
+    macro: M4
+    micro: M4.1
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "PROC_MEMFD_EXEC"
+  - id: PROC_PTRACE_INJECT
+    techniques: [T1055]
+    tactic: defense-evasion
+    macro: M4
+    micro: M4.1
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "PROC_PTRACE_INJECT"
+  - id: PROC_MASQUERADE_NAME
+    techniques: [T1036.005]
+    tactic: defense-evasion
+    macro: M4
+    micro: M4.1
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "PROC_MASQUERADE_NAME"
+  - id: PROC_HIDDEN_PID
+    techniques: [T1014]
+    tactic: defense-evasion
+    macro: M4
+    micro: M4.1
+    src: PROCSCAN
+    type: STATE
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "PROC_HIDDEN_PID"
+  - id: EXEC_FROM_TMPFS
+    techniques: [T1036]
+    tactic: defense-evasion
+    macro: M4
+    micro: M4.1
+    src: EBPF-EXEC
+    type: EVENT
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "EXEC_FROM_TMPFS"
+  - id: JOURNAL_VACUUM
+    techniques: [T1070.002]
+    tactic: defense-evasion
+    macro: M4
+    micro: M4.2
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    correlate: [PROC_SUDDEN_ROOT, WEB_WORKER_SHELL_CHILD]
+    correlate_window: 60m
+    correlate_boost: 25
+    description: "JOURNAL_VACUUM"
+  - id: LOG_TRUNCATE
+    techniques: [T1070.002]
+    tactic: defense-evasion
+    macro: M4
+    micro: M4.2
+    src: FIM
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    correlate: [PROC_SUDDEN_ROOT, WEB_WORKER_SHELL_CHILD, KERNEL_MODULE_LOAD]
+    correlate_window: 60m
+    correlate_boost: 25
+    description: "LOG_TRUNCATE"
+  - id: SHELL_HISTORY_TAMPER
+    techniques: [T1070.003]
+    tactic: defense-evasion
+    macro: M4
+    micro: M4.2
+    src: FIM
+    type: EVENT
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "SHELL_HISTORY_TAMPER"
+  - id: TIMESTOMP_INCONSISTENCY
+    techniques: [T1070.006]
+    tactic: defense-evasion
+    macro: M4
+    micro: M4.2
+    src: FIM
+    type: STATE
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "TIMESTOMP_INCONSISTENCY"
+  - id: RSYSLOG_CONFIG_TAMPER
+    techniques: [T1562.002]
+    tactic: defense-evasion
+    macro: M4
+    micro: M4.2
+    src: FIM
+    type: DELTA
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "RSYSLOG_CONFIG_TAMPER"
+  - id: SHADOW_READ_ANOMALY
+    techniques: [T1003.008]
+    tactic: credential-access
+    macro: M5
+    micro: M5.1
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "SHADOW_READ_ANOMALY"
+  - id: SSH_PRIVKEY_ACCESS
+    techniques: [T1552.004]
+    tactic: credential-access
+    macro: M5
+    micro: M5.1
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "SSH_PRIVKEY_ACCESS"
+  - id: SSH_AGENT_SOCKET_ABUSE
+    techniques: [T1552.004]
+    tactic: credential-access
+    macro: M5
+    micro: M5.1
+    src: EBPF-NET
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "SSH_AGENT_SOCKET_ABUSE"
+  - id: CLOUD_CRED_FILE_ACCESS
+    techniques: [T1552.001, T1552.005]
+    tactic: credential-access
+    macro: M5
+    micro: M5.1
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    correlate: [NETWORK_IMDS_ACCESS, WEB_WORKER_INTERP_CHILD]
+    correlate_window: 10m
+    correlate_boost: 25
+    description: "CLOUD_CRED_FILE_ACCESS"
+  - id: APP_SECRET_HARVEST
+    techniques: [T1552.001]
+    tactic: credential-access
+    macro: M5
+    micro: M5.1
+    src: AUDIT
+    type: EVENT
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "APP_SECRET_HARVEST"
+  - id: PROC_MEM_READ_CROSS_UID
+    techniques: [T1003]
+    tactic: credential-access
+    macro: M5
+    micro: M5.1
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "PROC_MEM_READ_CROSS_UID"
+  - id: CRED_MASS_FILE_ACCESS
+    techniques: [T1552.001]
+    tactic: credential-access
+    macro: M5
+    micro: M5.1
+    src: AUDIT
+    type: EVENT
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "CRED_MASS_FILE_ACCESS"
+  - id: CONTAINER_SOCKET_ACCESS
+    techniques: [T1609]
+    tactic: privilege-escalation
+    macro: M6
+    micro: M6.1
+    src: EBPF-FILE
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "CONTAINER_SOCKET_ACCESS"
+  - id: CONTAINER_HOST_MOUNT
+    techniques: [T1611]
+    tactic: privilege-escalation
+    macro: M6
+    micro: M6.1
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "CONTAINER_HOST_MOUNT"
+  - id: RUNC_SELF_EXE_WRITE
+    techniques: [T1611]
+    tactic: privilege-escalation
+    macro: M6
+    micro: M6.1
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "RUNC_SELF_EXE_WRITE"
+  - id: CGROUP_RELEASE_AGENT_WRITE
+    techniques: [T1611]
+    tactic: privilege-escalation
+    macro: M6
+    micro: M6.1
+    src: EBPF-FILE
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "CGROUP_RELEASE_AGENT_WRITE"
+  - id: CONTAINER_PRIVILEGED_START
+    techniques: [T1610]
+    tactic: privilege-escalation
+    macro: M6
+    micro: M6.1
+    src: EBPF-EXEC
+    type: EVENT
+    conf: MEDIUM
+    min_signals: 1
+    base_score: 55
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "CONTAINER_PRIVILEGED_START"
+  - id: LXD_HOST_DISK_ATTACH
+    techniques: [T1611]
+    tactic: privilege-escalation
+    macro: M6
+    micro: M6.1
+    src: EBPF-EXEC
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    description: "LXD_HOST_DISK_ATTACH"
+  - id: NS_ESCAPE_SETNS
+    techniques: [T1611]
+    tactic: privilege-escalation
+    macro: M6
+    micro: M6.1
+    src: AUDIT
+    type: EVENT
+    conf: HIGH
+    min_signals: 1
+    base_score: 70
+    per_signal_bonus: 10
+    cap_score: 100
+    correlate: [CONTAINER_SOCKET_ACCESS, LXD_HOST_DISK_ATTACH]
+    correlate_window: 10m
+    correlate_boost: 25
+    description: "NS_ESCAPE_SETNS"

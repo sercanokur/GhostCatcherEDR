@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	RulePtrace      = "SENSOR_PTRACE_ATTACH"
-	RuleMemfdCreate = "SENSOR_MEMFD_CREATE"
-	RuleInitModule  = "SENSOR_INIT_MODULE"
+	RulePtrace      = "PROC_PTRACE_INJECT"
+	RuleMemfdCreate = "PROC_MEMFD_EXEC"
+	RuleInitModule  = "KERNEL_MODULE_LOAD"
 )
 
 // FastKinds are sensor kinds handled inline (not via debounced RunOnce).
@@ -24,8 +24,11 @@ func FastKinds() map[sensor.Kind]struct{} {
 		sensor.KindPtrace:      {},
 		sensor.KindInitModule:  {},
 		sensor.KindMemfdCreate: {},
-		sensor.KindSocket:      {}, // copyfail handles socket separately
-		sensor.KindExec:        {}, // privesc seeds credential tracker
+		sensor.KindSocket:      {},
+		sensor.KindExec:        {},
+		sensor.KindOpenat:      {},
+		sensor.KindConnect:     {},
+		sensor.KindListen:      {},
 	}
 }
 

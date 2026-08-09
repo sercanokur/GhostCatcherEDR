@@ -64,11 +64,38 @@ func DefaultSensitivePaths(documentRoots []string) []SensitivePathSpec {
 		{Path: "/etc/passwd"},
 		{Path: "/etc/shadow"},
 		{Path: "/etc/group"},
+		{Path: "/etc/nsswitch.conf"},
 
 		// Kernel module load on boot.
 		{Path: "/etc/modules"},
 		{Path: "/etc/modules-load.d", Recursive: true},
 		{Path: "/etc/modprobe.d", Recursive: true},
+
+		// Ubuntu-specific persistence (bhv M2.4) + defense (M3.3) + logs (M4.2).
+		{Path: "/etc/apt/apt.conf.d", Recursive: true},
+		{Path: "/etc/update-motd.d", Recursive: true},
+		{Path: "/etc/profile"},
+		{Path: "/etc/profile.d", Recursive: true},
+		{Path: "/etc/bash.bashrc"},
+		{Path: "/etc/environment"},
+		{Path: "/etc/default", Recursive: true},
+		{Path: "/etc/networkd-dispatcher", Recursive: true},
+		{Path: "/etc/NetworkManager/dispatcher.d", Recursive: true},
+		{Path: "/etc/network/if-up.d", Recursive: true},
+		{Path: "/etc/udev/rules.d", Recursive: true},
+		{Path: "/etc/polkit-1/rules.d", Recursive: true},
+		{Path: "/etc/needrestart/conf.d", Recursive: true},
+		{Path: "/etc/rc.local"},
+		{Path: "/etc/initramfs-tools", Recursive: true},
+		{Path: "/etc/default/grub"},
+		{Path: "/etc/xdg/autostart", Recursive: true},
+		{Path: "/etc/apparmor.d/disable", Recursive: true},
+		{Path: "/usr/share/pam-configs", Recursive: true},
+		{Path: "/etc/ssh"},
+		{Path: "/etc/rsyslog.conf"},
+		{Path: "/etc/rsyslog.d", Recursive: true},
+		{Path: "/var/log/auth.log"},
+		{Path: "/var/log/syslog"},
 	}
 	for _, root := range documentRoots {
 		specs = append(specs, SensitivePathSpec{

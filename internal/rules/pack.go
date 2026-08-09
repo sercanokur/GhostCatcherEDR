@@ -26,6 +26,13 @@ type Rule struct {
 	CapScore    int      `yaml:"cap_score"`
 	Description string   `yaml:"description"`
 
+	// bhv.md taxonomy (optional; filled from mapping.yaml when empty).
+	Macro string `yaml:"macro"`
+	Micro string `yaml:"micro"`
+	Src   string `yaml:"src"`  // EBPF-EXEC|AUDIT|FIM|PROCSCAN|INVENTORY|...
+	Type  string `yaml:"type"` // EVENT|DELTA|STATE
+	Conf  string `yaml:"conf"` // HIGH|MEDIUM|LOW
+
 	// Expr (optional) is a boolean expression that, when present, must
 	// evaluate to true for an event to be alert-worthy. See expr.go.
 	Expr string `yaml:"expr"`
@@ -33,9 +40,9 @@ type Rule struct {
 	// Correlate (optional) links this rule to one or more other rule IDs
 	// that must have fired within CorrelateWindow for this one to escalate.
 	// Left empty for standalone rules.
-	Correlate        []string `yaml:"correlate"`
-	CorrelateWindow  string   `yaml:"correlate_window"`
-	CorrelateBoost   int      `yaml:"correlate_boost"`
+	Correlate       []string `yaml:"correlate"`
+	CorrelateWindow string   `yaml:"correlate_window"`
+	CorrelateBoost  int      `yaml:"correlate_boost"`
 
 	// KillChainPhase (optional) overrides tactic-derived Lockheed phase.
 	KillChainPhase string `yaml:"kill_chain_phase"`

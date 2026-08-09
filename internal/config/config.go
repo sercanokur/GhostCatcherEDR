@@ -106,6 +106,17 @@ type Config struct {
 
 	// Respond — OODA Act (audit-first active response).
 	Respond ResponseConfig `yaml:"respond"`
+
+	// MappingPath is the bhv.md nano catalog (configs/mapping.yaml).
+	MappingPath string `yaml:"mapping_path"`
+
+	// WatchedUnits are systemd unit names/prefixes used as primary web
+	// worker anchors (bhv.md). TargetProcessNames remain a fallback.
+	WatchedUnits []string `yaml:"watched_units"`
+
+	// FPAllowlistUnits are benign systemd units that should suppress or
+	// downgrade FIM/INVENTORY nanos (bhv §8).
+	FPAllowlistUnits []string `yaml:"fp_allowlist_units"`
 }
 
 // SuddenRootConfig tunes the behavior-only sudden-root detector.
@@ -281,6 +292,20 @@ func Default() *Config {
 			ProtectedPIDs:            []int{1},
 			RateLimitPerActionPerMin: 30,
 			RequireRoot:              true,
+		},
+		MappingPath: "",
+		WatchedUnits: []string{
+			"nginx.service", "apache2.service", "httpd.service",
+			"php-fpm", "php7.4-fpm", "php8.1-fpm", "php8.3-fpm",
+			"uwsgi.service", "gunicorn.service", "tomcat", "node",
+		},
+		FPAllowlistUnits: []string{
+			"unattended-upgrades.service", "apt-daily.service", "apt-daily-upgrade.service",
+			"snapd.service", "snapd.seeded.service", "cloud-init.service", "cloud-final.service",
+			"logrotate.service", "man-db.service", "plocate-updatedb.service",
+			"needrestart.service", "dkms.service", "fwupd.service",
+			"ua-timer.service", "landscape-client.service", "packagekit.service",
+			"motd-news.service",
 		},
 	}
 }

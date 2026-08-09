@@ -3,8 +3,8 @@ package sensor
 import (
 	"bufio"
 	"context"
-	"errors"
 	"io"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -110,20 +110,65 @@ func parseAuditLine(line string) (Event, bool) {
 		UID:       uint32(uid64),
 		Comm:      fields["comm"],
 		SyscallNR: nr,
+		Extra:     map[string]string{},
+	}
+	if exe := fields["exe"]; exe != "" {
+		ev.Path = exe
+		ev.Extra["exe"] = exe
+	}
+	// PATH/CWD join keys often appear on the same SYSCALL line as name=...
+	if name := fields["name"]; name != "" {
+		ev.Extra["path"] = name
+		if ev.Path == "" || kind == KindOpenat {
+			ev.Path = name
+		}
+	}
+	if cwd := fields["cwd"]; cwd != "" {
+		ev.Extra["cwd"] = cwd
+		if kind == KindOpenat && ev.Path != "" && !strings.HasPrefix(ev.Path, "/") {
+			ev.Path = strings.TrimRight(cwd, "/") + "/" + ev.Path
+			ev.Extra["path"] = ev.Path
+		}
+	}
+	if key := fields["key"]; key != "" {
+		ev.Extra["key"] = key
 	}
 	// Audit prints syscall arguments as hex without the 0x prefix.
 	// For socket() and splice() we capture them so downstream detectors
 	// (e.g. CVE-2026-31431 / Copy Fail) can reason about the syscall
 	// shape without needing kernel-side eBPF.
 	if kind == KindSocket || kind == KindSplice {
-		ev.Extra = map[string]string{}
 		for _, k := range []string{"a0", "a1", "a2", "a3", "exit", "success"} {
 			if v, ok := fields[k]; ok && v != "" {
 				ev.Extra[k] = v
 			}
 		}
 	}
+	if kind == KindConnect {
+		if addr := fields["addr"]; addr != "" {
+			ev.Extra["addr"] = addr
+			ev.RemoteIP = decodeAuditAddr(addr)
+		}
+	}
 	return ev, true
 }
 
-var _ = errors.New
+// decodeAuditAddr best-effort decodes an audit hex IPv4 sockaddr dump.
+func decodeAuditAddr(hexAddr string) string {
+	// Common form for AF_INET: 0200PORTIPBYTES... — length varies.
+	if len(hexAddr) < 16 {
+		return ""
+	}
+	b := make([]byte, len(hexAddr)/2)
+	for i := 0; i+1 < len(hexAddr); i += 2 {
+		v, err := strconv.ParseUint(hexAddr[i:i+2], 16, 8)
+		if err != nil {
+			return ""
+		}
+		b[i/2] = byte(v)
+	}
+	if len(b) >= 8 && b[0] == 0x02 { // AF_INET
+		return net.IP(b[4:8]).String()
+	}
+	return ""
+}
