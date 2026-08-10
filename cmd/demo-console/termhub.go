@@ -46,11 +46,24 @@ func (h *termHub) Write(kind, text string) {
 		if len(h.lines) > h.maxKeep {
 			h.lines = h.lines[len(h.lines)-h.maxKeep:]
 		}
-		for ch := range h.subs {
-			select {
-			case ch <- line:
-			default:
-			}
+		h.broadcast(line)
+	}
+}
+
+// broadcast must be called with h.mu held. Never drop: slow clients get a
+// buffered drain; if still full, spill into a short-lived goroutine.
+func (h *termHub) broadcast(line termLine) {
+	for ch := range h.subs {
+		select {
+		case ch <- line:
+		default:
+			go func(c chan termLine, l termLine) {
+				defer func() { _ = recover() }() // subscriber may have unsubscribed
+				select {
+				case c <- l:
+				case <-time.After(2 * time.Second):
+				}
+			}(ch, line)
 		}
 	}
 }
@@ -74,16 +87,11 @@ func (h *termHub) Clear() {
 	h.seq++
 	line := termLine{Seq: h.seq, Text: "— terminal cleared —", Kind: "meta"}
 	h.lines = append(h.lines, line)
-	for ch := range h.subs {
-		select {
-		case ch <- line:
-		default:
-		}
-	}
+	h.broadcast(line)
 }
 
 func (h *termHub) Subscribe() (chan termLine, func()) {
-	ch := make(chan termLine, 64)
+	ch := make(chan termLine, 512)
 	h.mu.Lock()
 	h.subs[ch] = struct{}{}
 	h.mu.Unlock()
@@ -105,15 +113,16 @@ func (h *termHub) serveSSE(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
 
-	// Replay backlog first.
+	// Subscribe before snapshot so lines produced during replay are not lost.
+	ch, unsub := h.Subscribe()
+	defer unsub()
+
 	for _, line := range h.Snapshot() {
 		writeSSE(w, line)
 	}
 	flusher.Flush()
-
-	ch, unsub := h.Subscribe()
-	defer unsub()
 
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()

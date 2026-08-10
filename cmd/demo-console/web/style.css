@@ -107,6 +107,48 @@ body {
   overflow: auto;
 }
 
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 1.25rem;
+}
+.chip {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font: 600 0.78rem/1 var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.45rem 0.65rem;
+  cursor: pointer;
+}
+.chip.active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+.chip:hover:not(.active) { border-color: var(--ink); color: var(--ink); }
+
+.group-label {
+  list-style: none;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+  margin: 0.75rem 0 0.15rem 3.1rem;
+  padding: 0;
+}
+
+.rule-ids {
+  margin: 0.25rem 0 0;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
 .timeline {
   list-style: none;
   margin: 0;

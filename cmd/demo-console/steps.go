@@ -22,6 +22,7 @@ const (
 type StepDef struct {
 	ID          string   `json:"id"`
 	Index       int      `json:"index"`
+	Group       string   `json:"group"`
 	Title       string   `json:"title"`
 	Narration   string   `json:"narration"`
 	RuleIDs     []string `json:"rule_ids"`
@@ -49,42 +50,7 @@ type demoEngine struct {
 }
 
 func newEngine(ssh *sshClient, term *termHub, target string) *demoEngine {
-	defs := []StepDef{
-		{
-			ID: "reset", Index: 0, Title: "Reset lab",
-			Narration: "Clear previous webshells, preload, lab SSH keys, and stray listeners.",
-			RemoteCmd: "/opt/ghostcatcher-lab/demo-killchain.sh --reset-only",
-			WaitSecs:  0, ExpectRules: false,
-		},
-		{
-			ID: "webshell", Index: 1, Title: "Act 0 — Webshell",
-			Narration: "Drop a PHP webshell via wp2shell (WordPress lab). EDR should see WEB_SHELL_PATTERN.",
-			RuleIDs:   []string{"WEB_SHELL_PATTERN"},
-			RemoteCmd: "bash /opt/ghostcatcher-lab/killchain/01-webshell.sh wp2shell",
-			WaitSecs:  45, ExpectRules: true,
-		},
-		{
-			ID: "sudden_root", Index: 2, Title: "Act 1 — Sudden root",
-			Narration: "Unprivileged labuser runs CAP_SETUID helper → euid 0. Look for PROC_SUDDEN_ROOT.",
-			RuleIDs:   []string{"PROC_SUDDEN_ROOT"},
-			RemoteCmd: "bash /opt/ghostcatcher-lab/killchain/02-sudden-root.sh sim",
-			WaitSecs:  60, ExpectRules: true,
-		},
-		{
-			ID: "persist", Index: 3, Title: "Act 2 — Persistence",
-			Narration: "Plant ld.so.preload + labuser authorized_keys after “root”.",
-			RuleIDs:   []string{"LD_SO_PRELOAD_FILE", "SSH_AUTHKEY_NEW"},
-			RemoteCmd: "bash /opt/ghostcatcher-lab/killchain/03-persist-evasion.sh",
-			WaitSecs:  60, ExpectRules: true,
-		},
-		{
-			ID: "reverse_shell", Index: 4, Title: "Act 3 — Reverse shell",
-			Narration: "bash /dev/tcp reverse shell on the host (self-listener). Expect PROC_SOCKET_STDIO.",
-			RuleIDs:   []string{"PROC_SOCKET_STDIO"},
-			RemoteCmd: "bash /opt/ghostcatcher-lab/killchain/04-reverse-shell.sh",
-			WaitSecs:  90, ExpectRules: true,
-		},
-	}
+	defs := allStepDefs()
 	steps := make([]StepState, len(defs))
 	for i, d := range defs {
 		steps[i] = StepState{StepDef: d, Status: statusIdle}
@@ -241,6 +207,7 @@ func (e *demoEngine) waitEvidence(rules []string, before map[string]int, secs in
 	for i, r := range rules {
 		evs[i] = Evidence{RuleID: r, Title: humanRuleTitle(r), Summary: "Waiting for alert…"}
 	}
+	lastProgress := time.Time{}
 	for time.Now().Before(deadline) {
 		allFresh := true
 		for i, r := range rules {
@@ -259,6 +226,15 @@ func (e *demoEngine) waitEvidence(rules []string, before map[string]int, secs in
 				ev.Summary = fmt.Sprintf("No new %s alert yet (count still %d).", r, counts[r])
 				ev.Bullets = nil
 				allFresh = false
+				if time.Since(lastProgress) >= 5*time.Second {
+					left := int(time.Until(deadline).Seconds())
+					if left < 0 {
+						left = 0
+					}
+					e.term.Printf("meta", "  … still waiting for new %s (before=%d now=%d, %ds left)",
+						r, before[r], counts[r], left)
+					lastProgress = time.Now()
+				}
 			}
 			evs[i] = ev
 			if !ev.Detected {

@@ -5,9 +5,12 @@ const btnRunAll = document.getElementById("btn-run-all");
 const btnTermClear = document.getElementById("btn-term-clear");
 const termEl = document.getElementById("term");
 const termTitle = document.getElementById("term-title");
+const groupFilters = document.getElementById("group-filters");
 
 let busy = false;
 let seenSeq = 0;
+let allSteps = [];
+let activeGroup = "all";
 
 async function api(path, opts) {
   const res = await fetch(path, opts);
@@ -35,7 +38,6 @@ function appendTermLine(line) {
   const span = document.createElement("span");
   span.className = "line " + (line.kind || "out");
   span.textContent = (line.text || "") + "\n";
-  // Keep blinking cursor at end
   const cursor = termEl.querySelector(".cursor");
   if (cursor) termEl.insertBefore(span, cursor);
   else termEl.appendChild(span);
@@ -51,32 +53,99 @@ function ensureCursor() {
   }
 }
 
+async function syncTerminal() {
+  try {
+    const data = await api("/api/terminal");
+    const lines = data.lines || [];
+    for (const line of lines) appendTermLine(line);
+    ensureCursor();
+  } catch (_) { /* ignore */ }
+}
+
+let termES = null;
+let termPoll = null;
+
 function connectTerminal() {
   ensureCursor();
+  if (termES) {
+    try { termES.close(); } catch (_) { /* ignore */ }
+    termES = null;
+  }
   const es = new EventSource("/api/terminal/stream");
+  termES = es;
   es.onmessage = (ev) => {
-    try {
-      appendTermLine(JSON.parse(ev.data));
-    } catch (_) { /* ignore */ }
+    try { appendTermLine(JSON.parse(ev.data)); } catch (_) { /* ignore */ }
   };
   es.onerror = () => {
-    // Browser will retry EventSource automatically.
+    // Browser will retry EventSource; also pull a snapshot so we don't stay blank.
+    syncTerminal();
   };
+}
+
+function startTermPoll() {
+  if (termPoll) return;
+  termPoll = setInterval(() => { syncTerminal(); }, 1000);
+}
+
+function stopTermPoll() {
+  if (!termPoll) return;
+  clearInterval(termPoll);
+  termPoll = null;
+}
+
+function renderFilters(steps) {
+  const groups = [];
+  const seen = new Set();
+  steps.forEach((s) => {
+    const g = s.group || "Other";
+    if (!seen.has(g)) { seen.add(g); groups.push(g); }
+  });
+  groupFilters.innerHTML = "";
+  const mk = (label, key) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip" + (activeGroup === key ? " active" : "");
+    b.textContent = label;
+    b.addEventListener("click", () => {
+      activeGroup = key;
+      renderFilters(allSteps);
+      renderSteps(allSteps);
+    });
+    groupFilters.appendChild(b);
+  };
+  mk("All", "all");
+  groups.forEach((g) => mk(g, g));
 }
 
 function renderSteps(steps) {
   timeline.innerHTML = "";
+  let lastGroup = null;
   steps.forEach((step, i) => {
+    const group = step.group || "Other";
+    if (activeGroup !== "all" && group !== activeGroup) return;
+
+    if (group !== lastGroup) {
+      lastGroup = group;
+      const h = document.createElement("li");
+      h.className = "group-label";
+      h.textContent = group;
+      timeline.appendChild(h);
+    }
+
     const li = document.createElement("li");
     li.className = "step";
     li.dataset.index = String(step.index);
     li.dataset.status = step.status || "idle";
-    li.style.animationDelay = `${i * 40}ms`;
+    li.style.animationDelay = `${Math.min(i, 12) * 30}ms`;
 
     const head = document.createElement("div");
     head.className = "step-head";
+    const rules = (step.rule_ids || []).join(", ");
     head.innerHTML = `
-      <h2>${escapeHtml(step.title)}</h2>
+      <div>
+        <h2>${escapeHtml(step.title)}</h2>
+        ${rules ? `<p class="rule-ids">${escapeHtml(rules)}</p>` : ""}
+      </div>
       <span class="badge ${step.status || "idle"}">${statusLabel(step.status)}</span>
     `;
 
@@ -89,7 +158,7 @@ function renderSteps(steps) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "btn step";
-    btn.textContent = step.id === "reset" ? "Reset" : "Run step";
+    btn.textContent = step.id === "reset" ? "Reset" : "Run case";
     btn.disabled = busy || step.status === "running";
     btn.addEventListener("click", () => runStep(step.id));
     actions.appendChild(btn);
@@ -148,27 +217,31 @@ function escapeHtml(s) {
 async function refresh() {
   const data = await api("/api/steps");
   if (data.target) termTitle.textContent = data.target + " — ssh";
-  renderSteps(data.steps || []);
+  allSteps = data.steps || [];
+  renderFilters(allSteps);
+  renderSteps(allSteps);
 }
 
 async function runStep(id) {
   if (busy) return;
   busy = true;
   setButtons(true);
+  startTermPoll();
   try {
-    const stepsData = await api("/api/steps");
-    const steps = stepsData.steps || [];
-    const idx = steps.findIndex((s) => s.id === id);
+    const idx = allSteps.findIndex((s) => s.id === id);
     if (idx >= 0) {
-      steps[idx].status = "running";
-      renderSteps(steps);
+      allSteps[idx] = { ...allSteps[idx], status: "running" };
+      renderSteps(allSteps);
     }
     await api(`/api/steps/${id}/run`, { method: "POST" });
+    await syncTerminal();
     await refresh();
   } catch (e) {
     alert(e.message || String(e));
+    await syncTerminal();
     await refresh();
   } finally {
+    stopTermPoll();
     busy = false;
     setButtons(false);
   }
@@ -176,16 +249,20 @@ async function runStep(id) {
 
 async function runAll() {
   if (busy) return;
-  if (!confirm("Reset lab and run the full kill-chain on the victim?")) return;
+  if (!confirm("Reset and run the kill-chain narrative (5 acts)?")) return;
   busy = true;
   setButtons(true);
+  startTermPoll();
   try {
     await api("/api/run-all", { method: "POST" });
+    await syncTerminal();
     await refresh();
   } catch (e) {
     alert(e.message || String(e));
+    await syncTerminal();
     await refresh();
   } finally {
+    stopTermPoll();
     busy = false;
     setButtons(false);
   }
@@ -206,9 +283,7 @@ async function checkHealth() {
 function setButtons(disabled) {
   btnRunAll.disabled = disabled;
   btnHealth.disabled = disabled;
-  timeline.querySelectorAll("button.step").forEach((b) => {
-    b.disabled = disabled;
-  });
+  timeline.querySelectorAll("button.step").forEach((b) => { b.disabled = disabled; });
 }
 
 btnHealth.addEventListener("click", checkHealth);
@@ -218,9 +293,11 @@ btnTermClear.addEventListener("click", async () => {
   termEl.innerHTML = "";
   seenSeq = 0;
   ensureCursor();
+  await syncTerminal();
 });
 
 connectTerminal();
+syncTerminal();
 refresh().catch((e) => {
   timeline.innerHTML = `<li class="step"><p class="narration">${escapeHtml(e.message)}</p></li>`;
 });

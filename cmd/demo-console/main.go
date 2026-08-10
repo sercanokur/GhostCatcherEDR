@@ -68,7 +68,14 @@ func main() {
 		writeJSON(w, st)
 	})
 	mux.HandleFunc("POST /api/run-all", func(w http.ResponseWriter, r *http.Request) {
+		// Default: kill-chain narrative only (safe for talks).
 		order := []string{"reset", "webshell", "sudden_root", "persist", "reverse_shell"}
+		if r.URL.Query().Get("scope") == "all" {
+			order = nil
+			for _, st := range eng.snapshot() {
+				order = append(order, st.ID)
+			}
+		}
 		var results []StepState
 		for _, id := range order {
 			st, err := eng.runStep(id)

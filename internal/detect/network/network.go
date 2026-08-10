@@ -8,6 +8,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"ghostcatcher/internal/baseline"
@@ -16,6 +17,22 @@ import (
 	"ghostcatcher/internal/procfs"
 	"ghostcatcher/internal/rules"
 )
+
+// knownListens tracks listen sockets seen on prior scans so NETWORK_LISTEN_NEW
+// is a real delta (including 0.0.0.0 / :: binds) rather than every scan.
+var (
+	listenMu     sync.Mutex
+	knownListens = map[string]struct{}{}
+	listenPrimed bool
+)
+
+func listenKey(row procfs.SocketRow) string {
+	ip := ""
+	if row.Local != nil {
+		ip = row.Local.String()
+	}
+	return row.Proto + "|" + ip + "|" + strconv.Itoa(row.LocalP)
+}
 
 const (
 	RuleSocketStdio     = "PROC_SOCKET_STDIO"
@@ -87,17 +104,30 @@ func Scan(cfg *config.Config, _ *baseline.Snapshot, pack *rules.Pack, agentVer s
 
 	now := time.Now().UTC()
 	var events []event.Event
+	currentListens := map[string]struct{}{}
+	type listenCand struct {
+		row  procfs.SocketRow
+		pid  int
+		comm string
+		sigs []string
+	}
+	var listenNew []listenCand
+
 	for _, row := range rows {
-		// Listen-delta (new unexpected listener that isn't localhost).
+		// Listen-delta: non-loopback listeners, including 0.0.0.0 / ::.
 		if (row.Proto == "tcp" || row.Proto == "tcp6") && row.State == procfs.TCPListen {
-			if !row.Local.IsLoopback() && !row.Local.IsUnspecified() {
+			if row.Local != nil && !row.Local.IsLoopback() {
+				key := listenKey(row)
+				currentListens[key] = struct{}{}
 				pid, comm := ownerInfo(row.Inode, owners)
 				sigs := []string{"new_listening_socket"}
+				if row.Local.IsUnspecified() {
+					sigs = append(sigs, "bind_all_interfaces")
+				}
 				if pid != 0 {
 					sigs = append(sigs, "comm:"+comm)
 				}
-				events = append(events, buildEvent(RuleListenNew, pid, comm, row, sigs,
-					[]string{"T1571"}, now, cfg, pack, agentVer, true))
+				listenNew = append(listenNew, listenCand{row: row, pid: pid, comm: comm, sigs: sigs})
 			}
 			continue
 		}
@@ -140,6 +170,31 @@ func Scan(cfg *config.Config, _ *baseline.Snapshot, pack *rules.Pack, agentVer s
 				[]string{"T1041", "T1071.001"}, now, cfg, pack, agentVer, false))
 		}
 	}
+
+	listenMu.Lock()
+	if !listenPrimed {
+		// First scan after process start: seed baseline, do not alert.
+		knownListens = currentListens
+		listenPrimed = true
+	} else {
+		for _, cand := range listenNew {
+			key := listenKey(cand.row)
+			if _, seen := knownListens[key]; seen {
+				continue
+			}
+			knownListens[key] = struct{}{}
+			events = append(events, buildEvent(RuleListenNew, cand.pid, cand.comm, cand.row, cand.sigs,
+				[]string{"T1571"}, now, cfg, pack, agentVer, true))
+		}
+		// Drop keys that disappeared so a re-bind can alert again later.
+		for k := range knownListens {
+			if _, ok := currentListens[k]; !ok {
+				delete(knownListens, k)
+			}
+		}
+	}
+	listenMu.Unlock()
+
 	return events, nil
 }
 

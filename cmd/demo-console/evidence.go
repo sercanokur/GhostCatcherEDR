@@ -55,20 +55,34 @@ func parseESLatest(ruleID, rawJSON string) Evidence {
 }
 
 func humanRuleTitle(ruleID string) string {
-	switch ruleID {
-	case "WEB_SHELL_PATTERN":
-		return "Webshell on disk"
-	case "PROC_SUDDEN_ROOT":
-		return "Sudden root / privilege escalation"
-	case "LD_SO_PRELOAD_FILE":
-		return "ld.so.preload persistence"
-	case "SSH_AUTHKEY_NEW":
-		return "New SSH authorized key"
-	case "PROC_SOCKET_STDIO":
-		return "Reverse shell / C2"
-	default:
-		return ruleID
+	titles := map[string]string{
+		"WEB_SHELL_PATTERN":           "Webshell on disk",
+		"WEB_WORKER_RECON_CHILD":      "Web worker recon child",
+		"PROC_SUDDEN_ROOT":            "Sudden root / privilege escalation",
+		"LD_SO_PRELOAD_FILE":          "ld.so.preload persistence",
+		"PROC_LD_PRELOAD_ENV":         "LD_PRELOAD in process env",
+		"SSH_AUTHKEY_NEW":             "New SSH authorized key",
+		"SSH_AUTHKEY_INVALID_LINE":    "Invalid SSH authorized_keys line",
+		"PROC_SOCKET_STDIO":           "Reverse shell / C2",
+		"CRON_HIGH_RISK":              "High-risk cron job",
+		"SUDOERS_PERSISTENCE":         "Sudoers persistence",
+		"SYSTEMD_PERSISTENCE":         "Systemd persistence",
+		"PAM_PERSISTENCE":             "PAM persistence",
+		"PROFILE_HOOK":                "Shell profile / RC hook",
+		"KERNEL_MODLOAD_PATH_CHANGED": "Kernel module load path changed",
+		"LD_SO_CONF_CHANGED":          "ld.so.conf changed",
+		"SSHD_CONFIG_ANOMALY":         "sshd config anomaly",
+		"USER_ACCOUNT_ANOMALY":        "User account anomaly",
+		"SUID_INVENTORY_DELTA":        "SUID inventory delta",
+		"FILE_CAPABILITY_DELTA":       "File capability delta",
+		"LIB_HASH_MISMATCH":           "Binary / library hash mismatch",
+		"NETWORK_LISTEN_NEW":          "Unexpected network listener",
+		"NETWORK_WEB_WORKER_EGRESS":   "Web worker egress",
 	}
+	if t, ok := titles[ruleID]; ok {
+		return t
+	}
+	return ruleID
 }
 
 func humanSummary(ruleID string, src map[string]any) string {
