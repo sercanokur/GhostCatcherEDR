@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -86,12 +87,28 @@ func (e *ebpfSource) Start(ctx context.Context, out chan<- Event) error {
 	for {
 		rec, err := e.rb.Read()
 		if err != nil {
-			return nil
+			if errors.Is(err, ringbuf.ErrClosed) {
+				return nil
+			}
+			// Lost/truncated samples and other ringbuf pressure show up here.
+			NoteRingbufOverrun(err)
+			continue
 		}
 		// The ringbuf payload layout is owned by bpf/sensor.c. Until that
 		// object is shipped we just pass a minimal placeholder event with
 		// the raw bytes in Extra so the UX remains visible.
-		out <- Event{Kind: KindExec, Extra: map[string]string{"raw_len": fmt.Sprintf("%d", len(rec.RawSample))}}
+		ev := Event{
+			Kind: KindExec,
+			When: time.Now().UTC(),
+			Extra: map[string]string{
+				"raw_len": fmt.Sprintf("%d", len(rec.RawSample)),
+			},
+		}
+		if !TryEmit(ctx, out, ev) {
+			// Channel full: keep draining the ringbuf so the kernel does
+			// not overwrite unread samples faster than necessary.
+			continue
+		}
 	}
 }
 

@@ -42,6 +42,7 @@ func BuildBaselineWebFiles(cfg *config.Config, snap *baseline.Snapshot) error {
 			snap.WebFiles[path] = baseline.WebFileRecord{
 				SHA256: hex.EncodeToString(sum[:]),
 				Mtime:  st.ModTime().UTC(),
+				Size:   st.Size(),
 			}
 			return nil
 		})

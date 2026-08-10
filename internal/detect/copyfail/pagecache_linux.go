@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 
+	"ghostcatcher/internal/budget"
+
 	"golang.org/x/sys/unix"
 )
 
@@ -52,8 +54,10 @@ func hashFile(path string) (string, error) {
 	}
 	defer f.Close()
 	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
+	n, err := io.Copy(h, f)
+	if err != nil {
 		return "", err
 	}
+	budget.AddHashBytes(n)
 	return hex.EncodeToString(h.Sum(nil)), nil
 }

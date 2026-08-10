@@ -8,10 +8,15 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"ghostcatcher/internal/budget"
 )
+
+func noteProcRead() { budget.AddProcRead(1) }
 
 // Processes returns numeric PIDs under /proc.
 func Processes() ([]int, error) {
+	noteProcRead()
 	ents, err := os.ReadDir("/proc")
 	if err != nil {
 		return nil, err
@@ -32,6 +37,7 @@ func Processes() ([]int, error) {
 
 // Comm returns executable basename for pid (from /proc/pid/comm).
 func Comm(pid int) (string, error) {
+	noteProcRead()
 	b, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "comm"))
 	if err != nil {
 		return "", err
@@ -41,6 +47,7 @@ func Comm(pid int) (string, error) {
 
 // Cmdline returns argv[0].. joined with nulls stripped for reading first arg.
 func Cmdline(pid int) ([]string, error) {
+	noteProcRead()
 	b, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "cmdline"))
 	if err != nil {
 		return nil, err
@@ -50,6 +57,7 @@ func Cmdline(pid int) ([]string, error) {
 
 // Environ reads /proc/pid/environ as KEY=value map (best effort).
 func Environ(pid int) (map[string]string, error) {
+	noteProcRead()
 	b, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "environ"))
 	if err != nil {
 		return nil, err

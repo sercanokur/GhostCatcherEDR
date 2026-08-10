@@ -30,6 +30,22 @@ jobs:
         run: |
           go run ./cmd/agent eval -corpus testdata/eval -min-f1 0.85
 
+      - name: Validate host-cost profiles
+        run: |
+          for f in configs/profiles/*.yaml; do
+            go run ./cmd/agent check-config -config "$f"
+          done
+
+      - name: Host scan budget gate
+        run: |
+          go test ./internal/runner/ -run 'TestHostScanBudget_RunOnce|TestConfigProfiles_Validate' -count=1 -v
+
+      - name: Host perf microbenchmarks
+        run: |
+          go test ./internal/runner/ ./internal/detect/web/ ./internal/detect/network/ ./internal/detect/privesc/ \
+            -run '^$' -bench 'BenchmarkRunOnce|BenchmarkRunFIMOnce|BenchmarkWebScan_|BenchmarkNetworkScan|BenchmarkSuddenRootSnapshot' \
+            -benchtime=50x -benchmem -count=1
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:

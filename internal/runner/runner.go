@@ -7,11 +7,14 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"context"
 	"ghostcatcher/internal/anchor"
 	"ghostcatcher/internal/baseline"
+	"ghostcatcher/internal/budget"
 	"ghostcatcher/internal/config"
 	"ghostcatcher/internal/container"
 	"ghostcatcher/internal/detect/ancestry"
@@ -59,7 +62,9 @@ type Runner struct {
 	pack       *rules.Pack
 	out        io.Writer
 	syslog     *syslog.Client
+	dedupMu    sync.Mutex
 	lastDedup  map[string]time.Time
+	dedupOps   uint64
 	limiter    *emit.Limiter
 	spool      *emit.Spool
 	feed       *ioc.Feed
@@ -69,6 +74,14 @@ type Runner struct {
 	vault      *quarantine.Vault
 	responder  *respond.Engine
 	privesc    *privesc.Tracker
+
+	// scanMu serializes full and FIM scans so ticker + fsnotify cannot
+	// multiply host CPU/I/O. TryLock skips overlapping requests.
+	scanMu             sync.Mutex
+	overlappingSkipped atomic.Uint64
+
+	baselineCache   baseline.Cache
+	lastNetworkScan time.Time
 }
 
 func New(cfg *config.Config, pack *rules.Pack) *Runner {
@@ -241,29 +254,62 @@ func (r *Runner) WithOutput(w io.Writer) *Runner {
 	return r
 }
 
+// OverlappingSkipped reports how many scan requests were dropped because
+// another scan was already in flight.
+func (r *Runner) OverlappingSkipped() uint64 {
+	return r.overlappingSkipped.Load()
+}
+
+// RunOnce runs the full detector suite. Concurrent callers (ticker +
+// watchers) are serialized; a second caller returns nil immediately and
+// increments OverlappingSkipped.
 func (r *Runner) RunOnce() error {
-	snap, err := baseline.Load(r.cfg.BaselinePath)
+	return r.runScan("full", r.scanFull)
+}
+
+// RunFIMOnce runs the cheap FIM-oriented detectors only (persistence,
+// ldpreload, web docroot/upload/tamper, fimextra, defense). Used by
+// fsnotify paths so a noisy watch set does not trigger network/PROCSCAN/
+// inventory work.
+func (r *Runner) RunFIMOnce() error {
+	return r.runScan("fim", r.scanFIM)
+}
+
+func (r *Runner) runScan(kind string, body func() error) error {
+	if !r.scanMu.TryLock() {
+		n := r.overlappingSkipped.Add(1)
+		slog.Debug("overlapping scan skipped", "kind", kind, "overlapping_skipped", n)
+		return nil
+	}
+	defer r.scanMu.Unlock()
+	start := time.Now()
+	err := body()
+	emitted, drop, overrun := sensor.Global.Snapshot()
+	budget.ObserveScan(kind, time.Since(start), budget.Extra{
+		OverlappingSkipped: r.overlappingSkipped.Load(),
+		SensorEmitted:      emitted,
+		SensorDrop:         drop,
+		RingbufOverrun:     overrun,
+	})
+	return err
+}
+
+func (r *Runner) scanFull() error {
+	snap, err := r.baselineCache.Get(r.cfg.BaselinePath)
 	if err != nil {
 		return err
 	}
 	var all []event.Event
-	ev, err := persistence.Scan(r.cfg, snap, r.pack, AgentVersion)
-	if err != nil {
-		return err
-	}
-	all = append(all, ev...)
 
-	ev2, err := ldpreload.Scan(r.cfg, snap, r.pack, AgentVersion)
-	if err != nil {
-		return err
+	// Inventory (SUID/dpkg) runs on its own ticker when
+	// integrity_scan_interval > 0; otherwise keep it in the full scan.
+	if r.cfg.IntegrityVerifyEnabled && r.cfg.IntegrityScanInterval.Duration() <= 0 {
+		evInt, err := integrity.Scan(r.cfg, snap, r.pack, AgentVersion)
+		if err != nil {
+			return err
+		}
+		all = append(all, evInt...)
 	}
-	all = append(all, ev2...)
-
-	evInt, err := integrity.Scan(r.cfg, snap, r.pack, AgentVersion)
-	if err != nil {
-		return err
-	}
-	all = append(all, evInt...)
 
 	evMap, err := memorymaps.Scan(r.cfg, snap, r.pack, AgentVersion)
 	if err != nil {
@@ -271,15 +317,18 @@ func (r *Runner) RunOnce() error {
 	}
 	all = append(all, evMap...)
 
-	evNet, err := network.Scan(r.cfg, snap, r.pack, AgentVersion)
-	if err != nil {
-		return err
+	if r.networkScanDue() {
+		evNet, err := network.Scan(r.cfg, snap, r.pack, AgentVersion)
+		if err != nil {
+			return err
+		}
+		all = append(all, evNet...)
+		r.lastNetworkScan = time.Now()
 	}
-	all = append(all, evNet...)
 
 	// CVE-2026-31431 ("Copy Fail") page-cache vs on-disk drift on watched
 	// SUID binaries. Linux-only; on macOS dev builds the detector
-	// returns nil silently.
+	// returns nil silently. Gated by copy_fail.page_cache_check_enabled.
 	if r.cfg.CopyFail.Enabled {
 		evCF, err := copyfail.Scan(r.cfg, snap, r.pack, AgentVersion)
 		if err != nil {
@@ -309,9 +358,89 @@ func (r *Runner) RunOnce() error {
 	}
 	all = append(all, evRecon...)
 
-	ev3, err := web.Scan(r.cfg, snap, r.pack, AgentVersion)
+	fim, err := r.collectFIM(snap)
 	if err != nil {
 		return err
+	}
+	all = append(all, fim...)
+
+	now := time.Now().UTC()
+	for i := range all {
+		r.processEvent(&all[i], time.Time{}, now)
+	}
+	return nil
+}
+
+func (r *Runner) scanFIM() error {
+	snap, err := r.baselineCache.Get(r.cfg.BaselinePath)
+	if err != nil {
+		return err
+	}
+	all, err := r.collectFIM(snap)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	for i := range all {
+		r.processEvent(&all[i], time.Time{}, now)
+	}
+	return nil
+}
+
+// RunInventoryOnce runs SUID/capability/dpkg integrity detectors.
+func (r *Runner) RunInventoryOnce() error {
+	return r.runScan("inventory", r.scanInventory)
+}
+
+func (r *Runner) scanInventory() error {
+	if !r.cfg.IntegrityVerifyEnabled {
+		return nil
+	}
+	snap, err := r.baselineCache.Get(r.cfg.BaselinePath)
+	if err != nil {
+		return err
+	}
+	evInt, err := integrity.Scan(r.cfg, snap, r.pack, AgentVersion)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	for i := range evInt {
+		r.processEvent(&evInt[i], time.Time{}, now)
+	}
+	return nil
+}
+
+func (r *Runner) networkScanDue() bool {
+	if !r.cfg.NetworkScanEnabled {
+		return false
+	}
+	interval := r.cfg.NetworkScanInterval.Duration()
+	if interval <= 0 || r.lastNetworkScan.IsZero() {
+		return true
+	}
+	return time.Since(r.lastNetworkScan) >= interval
+}
+
+// collectFIM gathers persistence / web / fimextra / defense events used by
+// both the full scan and the fsnotify-triggered light path.
+func (r *Runner) collectFIM(snap *baseline.Snapshot) ([]event.Event, error) {
+	var all []event.Event
+	ev, err := persistence.Scan(r.cfg, snap, r.pack, AgentVersion)
+	if err != nil {
+		return nil, err
+	}
+	all = append(all, ev...)
+
+	ev2, err := ldpreload.Scan(r.cfg, snap, r.pack, AgentVersion)
+	if err != nil {
+		return nil, err
+	}
+	all = append(all, ev2...)
+
+	ev3, err := web.Scan(r.cfg, snap, r.pack, AgentVersion)
+	if err != nil {
+		return nil, err
 	}
 	all = append(all, ev3...)
 
@@ -327,12 +456,7 @@ func (r *Runner) RunOnce() error {
 	if evDef, err := defense.ScanState(r.cfg, snap, r.pack, AgentVersion); err == nil {
 		all = append(all, evDef...)
 	}
-
-	now := time.Now().UTC()
-	for i := range all {
-		r.processEvent(&all[i], time.Time{}, now)
-	}
-	return nil
+	return all, nil
 }
 
 // processEvent runs Orient -> Decide -> Act -> emit gates for one event.
@@ -513,11 +637,30 @@ func (r *Runner) shouldDedup(key string) bool {
 	if key == "" {
 		return false
 	}
-	if t, ok := r.lastDedup[key]; ok && time.Since(t) < r.cfg.ScanInterval.Duration() {
+	r.dedupMu.Lock()
+	defer r.dedupMu.Unlock()
+	window := r.cfg.ScanInterval.Duration()
+	if window <= 0 {
+		window = 5 * time.Minute
+	}
+	if t, ok := r.lastDedup[key]; ok && time.Since(t) < window {
 		return true
 	}
 	r.lastDedup[key] = time.Now()
+	r.dedupOps++
+	if r.dedupOps%64 == 0 || len(r.lastDedup) > 10000 {
+		r.pruneDedupLocked(window)
+	}
 	return false
+}
+
+func (r *Runner) pruneDedupLocked(window time.Duration) {
+	cutoff := time.Now().Add(-window)
+	for k, t := range r.lastDedup {
+		if t.Before(cutoff) {
+			delete(r.lastDedup, k)
+		}
+	}
 }
 
 func (r *Runner) emit(e *event.Event) {
@@ -572,26 +715,33 @@ func shouldSOCEscalate(e *event.Event) bool {
 // RunLoop blocks, running scans on interval until ctx cancelled - caller can use signal.
 func (r *Runner) RunLoop(stop <-chan struct{}) {
 	if r.cfg.WatchAuthorizedKeys {
-		go watch.RunAuthorizedKeys(r.cfg.WatchDebounce.Duration(), func() error { return r.RunOnce() }, stop)
+		go watch.RunAuthorizedKeys(r.cfg.WatchDebounce.Duration(), func() error { return r.RunFIMOnce() }, stop)
 	}
 	if r.cfg.WatchSensitivePaths {
 		specs := watch.DefaultSensitivePaths(r.cfg.DocumentRoots)
-		go watch.RunSensitive(specs, r.cfg.WatchDebounce.Duration(), func() error { return r.RunOnce() }, stop)
+		go watch.RunSensitive(specs, r.cfg.WatchDebounce.Duration(), func() error { return r.RunFIMOnce() }, stop)
 	}
 
 	// Bring up the best available sensor (ebpf → auditd → /proc poll).
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if src, err := sensor.Auto(ctx); err == nil && src != nil {
-		slog.Info("sensor backend selected", "name", src.Name())
+	if src, err := sensor.Open(ctx, r.cfg.Sensor.Backend); err == nil && src != nil {
+		slog.Info("sensor backend selected",
+			"name", src.Name(),
+			"backend", r.cfg.Sensor.Backend,
+			"debounce_ms", r.cfg.Sensor.DebounceMS,
+		)
 		ch := make(chan sensor.Event, 1024)
 		go func() { _ = src.Start(ctx, ch) }()
 		go r.consumeSensor(ctx, ch)
 	} else if err != nil {
-		slog.Warn("sensor backend unavailable", "err", err)
+		slog.Warn("sensor backend unavailable", "backend", r.cfg.Sensor.Backend, "err", err)
 	}
 	if r.cfg.SuddenRoot.Enabled {
 		go r.suddenRootLoop(ctx)
+	}
+	if r.cfg.IntegrityVerifyEnabled && r.cfg.IntegrityScanInterval.Duration() > 0 {
+		go r.inventoryLoop(ctx)
 	}
 	go func() {
 		<-stop
@@ -666,6 +816,7 @@ func (r *Runner) watchdogLoop(interval time.Duration, stop <-chan struct{}) {
 // safety net for at-rest state.
 func (r *Runner) consumeSensor(ctx context.Context, ch <-chan sensor.Event) {
 	fast := sensorlive.FastKinds()
+	debouncer := sensor.NewDebouncer(time.Duration(r.cfg.Sensor.DebounceMS) * time.Millisecond)
 	for {
 		select {
 		case <-ctx.Done():
@@ -675,6 +826,9 @@ func (r *Runner) consumeSensor(ctx context.Context, ch <-chan sensor.Event) {
 				return
 			}
 			if _, isFast := fast[ev.Kind]; !isFast {
+				continue
+			}
+			if !debouncer.Allow(ev) {
 				continue
 			}
 			observedAt := ev.When
@@ -744,12 +898,34 @@ func (r *Runner) consumeSensor(ctx context.Context, ch <-chan sensor.Event) {
 	}
 }
 
+// inventoryLoop runs SUID/capability/dpkg drift checks on a long cadence
+// independent of scan_interval (bhv.md INVENTORY layer).
+func (r *Runner) inventoryLoop(ctx context.Context) {
+	interval := r.cfg.IntegrityScanInterval.Duration()
+	if interval <= 0 {
+		interval = 6 * time.Hour
+	}
+	_ = r.RunInventoryOnce()
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if err := r.RunInventoryOnce(); err != nil {
+				slog.Debug("inventory scan failed", "err", err)
+			}
+		}
+	}
+}
+
 // suddenRootLoop polls /proc credentials on a short interval so same-PID
 // privilege flips are visible even without an exec sensor event.
 func (r *Runner) suddenRootLoop(ctx context.Context) {
 	interval := r.cfg.SuddenRoot.SnapshotInterval.Duration()
 	if interval <= 0 {
-		interval = time.Second
+		interval = 10 * time.Second
 	}
 	t := time.NewTicker(interval)
 	defer t.Stop()

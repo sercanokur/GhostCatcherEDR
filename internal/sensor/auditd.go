@@ -54,10 +54,10 @@ func (a *auditdSource) Start(ctx context.Context, out chan<- Event) error {
 		if !ok {
 			continue
 		}
-		select {
-		case out <- ev:
-		case <-ctx.Done():
-			return nil
+		if !TryEmit(ctx, out, ev) {
+			if ctx.Err() != nil {
+				return nil
+			}
 		}
 	}
 }

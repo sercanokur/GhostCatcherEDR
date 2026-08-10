@@ -42,6 +42,7 @@ The agent reads a single YAML file (default `configs/config.example.yaml`, produ
 | `maps_watch_processes` | []string | nginx, apache2, … | `comm`s to inspect. |
 | `maps_path_allowlist_prefixes` | []path | `[]` | Quiet known-good map paths. |
 | `integrity_verify_enabled` | bool | `false` | dpkg/rpm hash verify + SUID/caps. |
+| `integrity_scan_interval` | duration | `6h` | Separate inventory ticker; `0` = every full scan. |
 | `integrity_paths` | []path | shipped | Critical binaries to verify. |
 
 ## Watchers
@@ -57,7 +58,10 @@ The agent reads a single YAML file (default `configs/config.example.yaml`, produ
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
 | `network_scan_enabled` | bool | `true` | `/proc/net` × fd correlation. |
+| `network_scan_interval` | duration | `15m` | Throttle vs `scan_interval`; `0` = every full scan. |
 | `network_ip_cidr_allowlist` | []cidr | RFC1918 + localhost | Treat as internal. |
+| `sensor.backend` | string | `auto` | `auto` \| `ebpf` \| `auditd` \| `proc-poll`. |
+| `sensor.debounce_ms` | int | `0` | Coalesce duplicate live events (raise on `ringbuffer.overrun`). |
 | `ancestry_scan_enabled` | bool | `true` | `PROC_RARE_ANCESTRY`. |
 | `yara_rules_dir` | path | `""` | Only with `-tags with_yara`. |
 | `yara_memory_enabled` | bool | `false` | Process memory scan. |
@@ -68,10 +72,10 @@ The agent reads a single YAML file (default `configs/config.example.yaml`, produ
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
 | `sudden_root.enabled` | bool | `true` | `PROC_SUDDEN_ROOT`. |
-| `sudden_root.snapshot_interval` | duration | `1s` | Credential poll. |
+| `sudden_root.snapshot_interval` | duration | `10s` | Credential poll (`1s` ok in lab). |
 | `sudden_root.allowed_exe_basenames` | []string | `[]` | Extra allowlist. |
 | `copy_fail.enabled` | bool | `true` | CVE-2026-31431. |
-| `copy_fail.page_cache_check_enabled` | bool | `true` | Periodic page-cache drift. |
+| `copy_fail.page_cache_check_enabled` | bool | `false` | Periodic page-cache drift (opt-in; evicts cache). |
 | `respond.enabled` | bool | `true` | OODA Act engine. |
 | `respond.mode` | string | `audit` | `audit` \| `enforce`. |
 | `respond.min_confidence` / `min_severity` | | | Gates for Act. |
@@ -97,6 +101,25 @@ The agent reads a single YAML file (default `configs/config.example.yaml`, produ
 ## Sinks
 
 See **[Sinks and SIEM](Sinks-and-SIEM)**. Blocks: `syslog_udp`, `syslog_tcp`, `splunk_hec`, `elastic_bulk`, `loki_push`.
+
+## Host-cost profiles
+
+Templates live under [`configs/profiles/`](../../configs/profiles/):
+
+| File | Stance |
+|------|--------|
+| `light.yaml` | Low host impact (15m scan, ancestry off) |
+| `balanced.yaml` | Matches `config.Default()` |
+| `heavy-host.yaml` | Large trees / dense hosts (15m scan, throttled network) |
+| `lab.yaml` | Aggressive demo cadence — not for production |
+
+```bash
+sudo cp configs/profiles/balanced.yaml /etc/ghostcatcher/config.yaml
+# edit document_roots / sinks / pack paths
+ghostcatcher check-config -config /etc/ghostcatcher/config.yaml
+```
+
+See `configs/profiles/README.txt` for install notes.
 
 ## Lab vs production packs
 

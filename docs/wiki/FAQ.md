@@ -29,14 +29,24 @@ Yes, with guardrails. The OODA **Act** phase is implemented in `internal/respond
 
 ## How heavy is it?
 
-In a typical web host with `scan_interval: 5m` and the eBPF sensor enabled:
+With the **balanced** profile (`configs/profiles/balanced.yaml`: `scan_interval: 5m`, sensor `auto`, page-cache check off, inventory on a 6h ticker):
 
-- 1–2 % of one CPU core for scan ticks; sensor itself is < 1 %.
-- 30–80 MB RSS depending on the size of `document_roots` (the web walker holds path lists, not file contents, in memory).
-- Disk: baseline JSON is on the order of MB for small hosts, tens of MB for large web roots.
-- Network: bounded by your sink throughput (one JSON per detection, plus periodic `WATCHDOG=1` over `NOTIFY_SOCKET`).
+- Scan ticks: typically **well under 1–2 % of one core** on a small docroot; watch for `scan.budget` / `duration_ms` in the journal.
+- Sensor: **&lt; 1 %** when eBPF/auditd is healthy; userland falls back to `/proc` poll only if both are unavailable.
+- RSS: **~30–80 MB** driven mainly by `document_roots` size (path lists + rule pack), not by holding file contents.
+- Disk: baseline JSON is MBs on small hosts, tens of MB on large web roots.
+- Network: bounded by sink throughput (one JSON per detection).
 
-Heavy hosts may benefit from `scan_interval: 15m` paired with an active sensor; the eBPF/auditd path catches the time-sensitive stuff.
+Pick a profile instead of inventing knobs:
+
+| Profile | Use when |
+|---------|----------|
+| `configs/profiles/light.yaml` | Constrained VMs; 15m scan, ancestry off, `debounce_ms: 50` |
+| `configs/profiles/balanced.yaml` | Default production |
+| `configs/profiles/heavy-host.yaml` | Large CMS / dense PID tables; 15m scan, longer network/inventory |
+| `configs/profiles/lab.yaml` | Demo only — **do not** copy 1m / `sudden_root: 1s` to prod |
+
+Local load checks: `go test -bench=BenchmarkWebScan_Busy ./internal/detect/web/` (500-file docroot) and `go test -bench=BenchmarkSuddenRootSnapshot ./internal/detect/privesc/` (walks live `/proc`).
 
 ## Why YARA behind a build tag?
 

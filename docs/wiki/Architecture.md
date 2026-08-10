@@ -108,9 +108,14 @@ One long-lived process per host maintains:
 
 ## Concurrency model
 
-- Scanners run synchronously in the scan goroutine; expensive ones are config-gated.
+- Full, FIM, and inventory scans share a mutex (`TryLock`); overlapping ticker/fsnotify requests are skipped and counted.
+- Network scans are further throttled by `network_scan_interval` (default 15m); inventory (SUID/dpkg) uses `integrity_scan_interval` (default 6h).
+- Expensive detectors (network, ancestry, copy-fail page-cache, …) stay on the periodic full scan; fsnotify triggers `RunFIMOnce`.
+- Baseline JSON is mtime/size-cached across scans; web content reads skip when baseline mtime(+size) still matches.
+- Sensor producers use non-blocking emit (`sensor.channel_drop` / `ringbuffer.overrun` counters); optional `sensor.debounce_ms` coalesces the OODA fast path.
+- Host budget lines (`scan.budget`) log `duration_ms`, `proc_reads`, `hash_bytes`, and sensor drop counters.
 - The sensor consumer runs in its own goroutine and dispatches live nanos inline (milliseconds Observe→Act).
-- fsnotify debounces bursts before triggering `RunOnce`.
+- fsnotify debounces bursts before triggering the light FIM path.
 - Sink writes are sequential per sink and do not block the scan loop.
 
 ## Failure model

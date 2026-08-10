@@ -1,0 +1,68 @@
+# Profile: heavy-host — large CMS trees / dense process tables.
+# Full scan every 15m; network + inventory on long cadences; sensor carries live nanos.
+scan_interval: 15m
+baseline_path: ./var/baseline.json
+rule_pack_path: ./configs/rule_pack.example.yaml
+mapping_path: ./configs/mapping.yaml
+state_dir: ./var
+min_confidence_for_alert: 70
+learning_mode: false
+require_root: false
+first_run_allow_alerts: false
+web_recent_change_days: 14
+
+watched_units:
+  - nginx.service
+  - apache2.service
+  - php-fpm
+  - php8.1-fpm
+  - php8.3-fpm
+
+fp_allowlist_units:
+  - unattended-upgrades.service
+  - apt-daily.service
+  - snapd.service
+  - logrotate.service
+  - plocate-updatedb.service
+
+document_roots:
+  - ./testdata/webroot
+path_allowlist_prefixes:
+  - ./testdata/webroot/vendor/
+
+ld_preload_target_processes: [nginx, apache2, httpd, sshd, cron, CRON]
+maps_scan_enabled: false
+integrity_verify_enabled: true
+integrity_scan_interval: 6h
+web_recon_child_scan_enabled: true
+watch_authorized_keys: false
+watch_sensitive_paths: true
+watch_debounce: 1500ms
+network_scan_enabled: true
+network_scan_interval: 30m
+ancestry_scan_enabled: true
+
+sensor:
+  backend: auto
+  debounce_ms: 100
+
+copy_fail:
+  enabled: true
+  page_cache_check_enabled: false
+
+sudden_root:
+  enabled: true
+  snapshot_interval: 15s
+
+respond:
+  enabled: true
+  mode: audit
+  min_confidence: 85
+  min_severity: high
+  allow_quarantine: true
+  allow_kill_process: true
+  allow_isolate_host: false
+  protected_comms: [sshd, systemd, ghostcatcher]
+  protected_pids: [1]
+  rate_limit_per_action_per_min: 30
+  require_root: true

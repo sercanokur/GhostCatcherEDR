@@ -95,3 +95,82 @@ func TestRunOnce_NoAlertWhenBaselineMatches(t *testing.T) {
 		}
 	}
 }
+
+func TestRunOnce_SkipsWhenAlreadyRunning(t *testing.T) {
+	cfg := config.Default()
+	cfg.BaselinePath = filepath.Join(t.TempDir(), "baseline.json")
+	r := New(cfg, &rules.Pack{})
+	r.scanMu.Lock()
+	defer r.scanMu.Unlock()
+
+	done := make(chan error, 1)
+	go func() { done <- r.RunOnce() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("overlapping RunOnce: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("overlapping RunOnce blocked instead of skipping")
+	}
+	if r.OverlappingSkipped() != 1 {
+		t.Fatalf("OverlappingSkipped=%d want 1", r.OverlappingSkipped())
+	}
+}
+
+func TestRunFIMOnce_SkipsWhenFullScanHoldsLock(t *testing.T) {
+	cfg := config.Default()
+	cfg.BaselinePath = filepath.Join(t.TempDir(), "baseline.json")
+	r := New(cfg, &rules.Pack{})
+	r.scanMu.Lock()
+	defer r.scanMu.Unlock()
+
+	if err := r.RunFIMOnce(); err != nil {
+		t.Fatal(err)
+	}
+	if r.OverlappingSkipped() != 1 {
+		t.Fatalf("OverlappingSkipped=%d want 1", r.OverlappingSkipped())
+	}
+}
+
+func TestShouldDedup_PrunesExpired(t *testing.T) {
+	cfg := config.Default()
+	cfg.ScanInterval = config.Duration(50 * time.Millisecond)
+	r := New(cfg, &rules.Pack{})
+	if r.shouldDedup("k1") {
+		t.Fatal("first should emit")
+	}
+	if !r.shouldDedup("k1") {
+		t.Fatal("second should dedup")
+	}
+	time.Sleep(60 * time.Millisecond)
+	r.dedupMu.Lock()
+	r.pruneDedupLocked(50 * time.Millisecond)
+	r.dedupMu.Unlock()
+	if r.shouldDedup("k1") {
+		t.Fatal("after prune+expiry should emit again")
+	}
+}
+
+func TestNetworkScanDue(t *testing.T) {
+	cfg := config.Default()
+	cfg.NetworkScanEnabled = true
+	cfg.NetworkScanInterval = config.Duration(15 * time.Minute)
+	r := New(cfg, &rules.Pack{})
+	if !r.networkScanDue() {
+		t.Fatal("first scan should be due")
+	}
+	r.lastNetworkScan = time.Now()
+	if r.networkScanDue() {
+		t.Fatal("should throttle within interval")
+	}
+	r.lastNetworkScan = time.Now().Add(-16 * time.Minute)
+	if !r.networkScanDue() {
+		t.Fatal("should run after interval")
+	}
+	cfg.NetworkScanInterval = 0
+	r.lastNetworkScan = time.Now()
+	if !r.networkScanDue() {
+		t.Fatal("interval 0 means every full scan")
+	}
+}

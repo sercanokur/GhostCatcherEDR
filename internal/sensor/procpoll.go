@@ -52,13 +52,13 @@ func (p *procPoll) Start(ctx context.Context, out chan<- Event) error {
 			comm, _ := procfs.Comm(pid)
 			argv, _ := procfs.Cmdline(pid)
 			ppid, _ := procfs.PPid(pid)
-			select {
-			case out <- Event{
+			if !TryEmit(ctx, out, Event{
 				Kind: KindExec, When: time.Now().UTC(),
 				PID: pid, PPID: ppid, Comm: comm, Argv: argv,
-			}:
-			case <-ctx.Done():
-				return nil
+			}) {
+				if ctx.Err() != nil {
+					return nil
+				}
 			}
 		}
 		prev = cur

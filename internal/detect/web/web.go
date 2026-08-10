@@ -13,6 +13,7 @@ import (
 
 	"ghostcatcher/internal/anchor"
 	"ghostcatcher/internal/baseline"
+	"ghostcatcher/internal/budget"
 	"ghostcatcher/internal/config"
 	"ghostcatcher/internal/event"
 	"ghostcatcher/internal/procfs"
@@ -71,10 +72,15 @@ func Scan(cfg *config.Config, snap *baseline.Snapshot, pack *rules.Pack, agentVe
 			if !suspicious && st.Size() > 1<<20 {
 				return nil
 			}
+			// Skip content I/O when baseline mtime(+size) still matches.
+			if rec, ok := snap.WebFiles[path]; ok && baselineMetaMatches(st, rec) {
+				return nil
+			}
 			data, err := os.ReadFile(path)
 			if err != nil {
 				return nil
 			}
+			budget.AddHashBytes(int64(len(data)))
 			polyglot := magicByteMismatch(path, data)
 			if !suspicious && !polyglot {
 				return nil

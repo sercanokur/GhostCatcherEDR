@@ -59,9 +59,13 @@ Common failure modes, what they look like, and how to fix them. Each entry follo
 
 ### eBPF ringbuffer overruns
 
-- **Symptom:** Periodic `ringbuffer.overrun` warnings; sporadic missed events.
-- **Diagnose:** host is very busy (high syscall rate from a noisy workload).
-- **Fix:** raise `sensor.debounce_ms`, restrict `ancestry_juicy_parents` / `ancestry_child_set`, or fall back to auditd which has its own rate limits configured at the kernel level.
+- **Symptom:** Periodic `ringbuffer.overrun` or `sensor.channel_drop` warnings; sporadic missed events.
+- **Diagnose:**
+  ```bash
+  journalctl -u ghostcatcher -g 'ringbuffer.overrun|sensor.channel_drop|scan.budget' --since '1h ago'
+  ```
+  Busy hosts fill the per-CPU ringbuffer or the 1024-event userland channel.
+- **Fix:** raise `sensor.debounce_ms` (e.g. `50`–`200`), pin `sensor.backend: auditd`, or reduce concurrent scanners. Live AF_ALG/sudden-root paths stay on the sensor; periodic scans still cover at-rest state.
 
 ### auditd backend sees nothing
 

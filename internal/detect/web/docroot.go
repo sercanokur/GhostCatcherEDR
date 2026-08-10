@@ -10,6 +10,7 @@ import (
 
 	"ghostcatcher/internal/anchor"
 	"ghostcatcher/internal/baseline"
+	"ghostcatcher/internal/budget"
 	"ghostcatcher/internal/config"
 	"ghostcatcher/internal/event"
 	"ghostcatcher/internal/rules"
@@ -108,7 +109,9 @@ func ScanUploadDirs(cfg *config.Config, snap *baseline.Snapshot, pack *rules.Pac
 				return nil
 			}
 			if rec, ok := snap.WebFiles[path]; ok {
-				// unchanged
+				if baselineMetaMatches(info, rec) {
+					return nil
+				}
 				sum := fileSHA(path)
 				if sum != "" && rec.SHA256 == sum {
 					return nil
@@ -152,6 +155,13 @@ func ScanAppTamper(cfg *config.Config, snap *baseline.Snapshot, pack *rules.Pack
 	now := time.Now().UTC()
 	learning := cfg.LearningMode
 	for path, rec := range snap.WebFiles {
+		st, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		if baselineMetaMatches(st, rec) {
+			continue
+		}
 		sum := fileSHA(path)
 		if sum == "" || sum == rec.SHA256 {
 			continue
@@ -211,6 +221,7 @@ func fileSHA(path string) string {
 	if err != nil {
 		return ""
 	}
+	budget.AddHashBytes(int64(len(b)))
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
 }

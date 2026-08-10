@@ -80,7 +80,7 @@ Additionally, when `sudden_root.enabled` is true, a ~1s `/proc` credential snaps
 
 | Source | Mechanism | Typical nanos |
 |--------|-----------|---------------|
-| **FIM** | fsnotify → debounced `RunOnce` + hash deltas in persistence/fimextra/web | SSH drop-ins, cron, apt hooks, motd, profile, log truncate |
+| **FIM** | fsnotify → debounced `RunFIMOnce` + hash deltas in persistence/fimextra/web | SSH drop-ins, cron, apt hooks, motd, profile, log truncate |
 | **INVENTORY** | Periodic dpkg verify / SUID / caps / web baseline | `LIB_HASH_MISMATCH`, `SUID_*`, `WEB_APP_FILE_TAMPER` |
 | **PROCSCAN** | Periodic `/proc` maps, net, ancestry, worker children | `PROC_RWX_*`, `PROC_SOCKET_STDIO`, `WEB_WORKER_*` |
 

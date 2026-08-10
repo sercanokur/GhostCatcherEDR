@@ -176,7 +176,8 @@ On **push** to `main` and on **pull requests**, [`.github/workflows/ci.yml`](.gi
 1. Copy and edit config:
 
    ```bash
-   cp configs/config.example.yaml configs/config.yaml
+   cp configs/profiles/balanced.yaml configs/config.yaml
+   # or: light.yaml / heavy-host.yaml / lab.yaml — see configs/profiles/README.txt
    # Set document_roots, baseline_path, rule_pack_path, mapping_path, watched_units.
    ```
 
@@ -238,7 +239,7 @@ Typical Ubuntu/Debian layout:
 
    ```bash
    sudo mkdir -p /etc/ghostcatcher /var/lib/ghostcatcher
-   sudo cp configs/config.example.yaml /etc/ghostcatcher/config.yaml
+   sudo cp configs/profiles/balanced.yaml /etc/ghostcatcher/config.yaml
    sudo cp configs/rule_pack.example.yaml /etc/ghostcatcher/rule_pack.yaml
    sudo cp configs/mapping.yaml /etc/ghostcatcher/mapping.yaml
    sudo chmod 0640 /etc/ghostcatcher/*.yaml

@@ -24,7 +24,38 @@ var (
 	listenMu     sync.Mutex
 	knownListens = map[string]struct{}{}
 	listenPrimed bool
+
+	// inodeOwnersCache avoids re-walking /proc/*/fd on every scan when
+	// calls arrive faster than inodeCacheTTL (e.g. lab 1m intervals).
+	inodeCacheMu     sync.Mutex
+	inodeOwnersCache map[uint64]int
+	inodeCacheAt     time.Time
 )
+
+const inodeCacheTTL = 30 * time.Second
+
+func socketOwners(pids []int) map[uint64]int {
+	inodeCacheMu.Lock()
+	defer inodeCacheMu.Unlock()
+	if inodeOwnersCache != nil && time.Since(inodeCacheAt) < inodeCacheTTL {
+		return inodeOwnersCache
+	}
+	owners := make(map[uint64]int, len(pids))
+	for _, pid := range pids {
+		inodes, err := procfs.SocketInodes(pid)
+		if err != nil {
+			continue
+		}
+		for in := range inodes {
+			if _, dup := owners[in]; !dup {
+				owners[in] = pid
+			}
+		}
+	}
+	inodeOwnersCache = owners
+	inodeCacheAt = time.Now()
+	return owners
+}
 
 func listenKey(row procfs.SocketRow) string {
 	ip := ""
@@ -69,19 +100,7 @@ func Scan(cfg *config.Config, _ *baseline.Snapshot, pack *rules.Pack, agentVer s
 	if err != nil {
 		return nil, nil
 	}
-	// inode -> pid map
-	owners := map[uint64]int{}
-	for _, pid := range pids {
-		inodes, err := procfs.SocketInodes(pid)
-		if err != nil {
-			continue
-		}
-		for in := range inodes {
-			if _, dup := owners[in]; !dup {
-				owners[in] = pid
-			}
-		}
-	}
+	owners := socketOwners(pids)
 
 	allowNets, err := parseCIDRs(cfg.NetworkAllowlist)
 	if err != nil {

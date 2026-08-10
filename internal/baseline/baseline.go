@@ -47,6 +47,9 @@ type Snapshot struct {
 type WebFileRecord struct {
 	SHA256 string    `json:"sha256"`
 	Mtime  time.Time `json:"mtime"`
+	// Size enables mtime+size short-circuit so scanners skip ReadFile/hash
+	// when the on-disk metadata still matches the committed baseline.
+	Size int64 `json:"size,omitempty"`
 }
 
 func EmptySnapshot() *Snapshot {

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,14 +18,19 @@ import (
 type SensitivePathSpec struct {
 	Path      string
 	Recursive bool
-	// FilenameFilter, when non-nil, is called for every event and must return
-	// true for the event to trigger a rescan. Useful to narrow noisy dirs.
+	// FilenameFilter, when non-nil, is called for every event under Path
+	// (including nested dirs when Recursive) and must return true for the
+	// event to trigger a rescan. Useful to narrow noisy dirs.
 	FilenameFilter func(name string) bool
 }
 
 // DefaultSensitivePaths returns the canonical "anything under here changes =
 // rescan now" list. The agent still scans on schedule; this list exists to
 // shrink detection latency to near-zero for the most attacker-targeted paths.
+//
+// Live log files are intentionally omitted: auth.log/syslog rotate and grow
+// constantly and would force continuous rescans. Watch rsyslog config instead
+// for M4.2 tamper signals.
 //
 // Non-existent entries are silently skipped by the watcher loop so the list
 // can be shared across distros.
@@ -71,7 +77,7 @@ func DefaultSensitivePaths(documentRoots []string) []SensitivePathSpec {
 		{Path: "/etc/modules-load.d", Recursive: true},
 		{Path: "/etc/modprobe.d", Recursive: true},
 
-		// Ubuntu-specific persistence (bhv M2.4) + defense (M3.3) + logs (M4.2).
+		// Ubuntu-specific persistence (bhv M2.4) + defense (M3.3) + log config (M4.2).
 		{Path: "/etc/apt/apt.conf.d", Recursive: true},
 		{Path: "/etc/update-motd.d", Recursive: true},
 		{Path: "/etc/profile"},
@@ -94,8 +100,6 @@ func DefaultSensitivePaths(documentRoots []string) []SensitivePathSpec {
 		{Path: "/etc/ssh"},
 		{Path: "/etc/rsyslog.conf"},
 		{Path: "/etc/rsyslog.d", Recursive: true},
-		{Path: "/var/log/auth.log"},
-		{Path: "/var/log/syslog"},
 	}
 	for _, root := range documentRoots {
 		specs = append(specs, SensitivePathSpec{
@@ -113,6 +117,20 @@ func DefaultSensitivePaths(documentRoots []string) []SensitivePathSpec {
 		})
 	}
 	return specs
+}
+
+// pathUnder reports whether path is root or a descendant of root.
+func pathUnder(root, path string) bool {
+	if root == "" || path == "" {
+		return false
+	}
+	cleanRoot := filepath.Clean(root)
+	cleanPath := filepath.Clean(path)
+	if cleanPath == cleanRoot {
+		return true
+	}
+	prefix := cleanRoot + string(os.PathSeparator)
+	return strings.HasPrefix(cleanPath, prefix)
 }
 
 // RunSensitive watches every spec and calls onScan (debounced) any time
@@ -190,16 +208,15 @@ func RunSensitive(specs []SensitivePathSpec, debounce time.Duration, onScan func
 					register(ev.Name)
 				}
 			}
-			// Apply filters for noisy dirs like document_roots.
+			// Apply filters for noisy dirs like document_roots (nested paths too).
 			name := filepath.Base(ev.Name)
 			keep := true
 			for _, s := range specs {
-				if s.FilenameFilter != nil && filepath.Dir(ev.Name) == s.Path {
-					if !s.FilenameFilter(name) {
-						keep = false
-						break
-					}
+				if s.FilenameFilter == nil || !pathUnder(s.Path, ev.Name) {
+					continue
 				}
+				keep = s.FilenameFilter(name)
+				break
 			}
 			if !keep {
 				continue

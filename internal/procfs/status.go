@@ -23,6 +23,7 @@ type Status struct {
 // ReadStatus returns the parsed /proc/[pid]/status. Missing fields are
 // tolerated: the caller must treat zero/empty values as "unknown".
 func ReadStatus(pid int) (Status, error) {
+	noteProcRead()
 	var s Status
 	f, err := os.Open(filepath.Join("/proc", strconv.Itoa(pid), "status"))
 	if err != nil {

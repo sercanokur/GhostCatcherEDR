@@ -29,8 +29,11 @@ type Config struct {
 	MapsPathAllowlist  []string `yaml:"maps_path_allowlist_prefixes"`
 
 	// Tripwire-style verification vs dpkg md5sums (Debian/Ubuntu).
-	IntegrityVerifyEnabled bool     `yaml:"integrity_verify_enabled"`
-	IntegrityPaths         []string `yaml:"integrity_paths"`
+	IntegrityVerifyEnabled bool `yaml:"integrity_verify_enabled"`
+	// IntegrityScanInterval runs SUID/caps/dpkg inventory on its own ticker
+	// (default 6h). Zero means inventory runs inside every full scan.
+	IntegrityScanInterval Duration `yaml:"integrity_scan_interval"`
+	IntegrityPaths        []string `yaml:"integrity_paths"`
 
 	// Web worker children running typical post-exploit recon argv (auditd-like signal without auditd).
 	WebReconChildScanEnabled bool `yaml:"web_recon_child_scan_enabled"`
@@ -44,8 +47,11 @@ type Config struct {
 	WatchSensitivePaths bool `yaml:"watch_sensitive_paths"`
 
 	// /proc/net/tcp[6] + /proc/*/fd correlation (network sensor).
-	NetworkScanEnabled bool     `yaml:"network_scan_enabled"`
-	NetworkAllowlist   []string `yaml:"network_ip_cidr_allowlist"`
+	NetworkScanEnabled bool `yaml:"network_scan_enabled"`
+	// NetworkScanInterval throttles the expensive fd×inode walk relative to
+	// scan_interval (default 15m). Zero means every full scan.
+	NetworkScanInterval Duration `yaml:"network_scan_interval"`
+	NetworkAllowlist    []string `yaml:"network_ip_cidr_allowlist"`
 
 	// IOC feed files loaded at boot (one line per indicator).
 	IOCFeedHashFiles   []string `yaml:"ioc_hash_files"`
@@ -104,6 +110,9 @@ type Config struct {
 	// See internal/detect/privesc.
 	SuddenRoot SuddenRootConfig `yaml:"sudden_root"`
 
+	// Sensor selects the runtime event backend and optional userland debounce.
+	Sensor SensorConfig `yaml:"sensor"`
+
 	// Respond — OODA Act (audit-first active response).
 	Respond ResponseConfig `yaml:"respond"`
 
@@ -120,13 +129,22 @@ type Config struct {
 }
 
 // SuddenRootConfig tunes the behavior-only sudden-root detector.
-// SnapshotInterval defaults to 1s; legit setuid helpers are allowlisted
-// by basename and may be extended by the operator.
+// SnapshotInterval defaults to 10s (lab may set 1s); legit setuid helpers
+// are allowlisted by basename and may be extended by the operator.
 type SuddenRootConfig struct {
 	Enabled              bool     `yaml:"enabled"`
 	SnapshotInterval     Duration `yaml:"snapshot_interval"`
 	AllowedExeBasenames  []string `yaml:"allowed_exe_basenames"`
 	AllowedAncestorComms []string `yaml:"allowed_ancestor_comms"`
+}
+
+// SensorConfig selects the syscall event backend.
+// Backend: auto|ebpf|auditd|proc-poll. DebounceMS coalesces duplicate
+// events on the OODA fast path when the host is noisy (helps with
+// ringbuffer.overrun pressure).
+type SensorConfig struct {
+	Backend    string `yaml:"backend"`
+	DebounceMS int    `yaml:"debounce_ms"`
 }
 
 // ResponseConfig tunes active response. Mode defaults to audit (log intent only).
@@ -146,11 +164,10 @@ type ResponseConfig struct {
 	RequireRoot              bool     `yaml:"require_root"`
 }
 
-// CopyFailConfig tunes the CVE-2026-31431 detector. Defaults err on the
-// side of detection: the live AF_ALG socket() leg is enabled whenever
-// the auditd / eBPF sensor produces socket events, and the periodic
-// page-cache vs on-disk drift leg runs against a sane default
-// SUID-binary watchlist.
+// CopyFailConfig tunes the CVE-2026-31431 detector. The live AF_ALG
+// socket() leg stays on by default; the periodic page-cache vs on-disk
+// drift leg is opt-in because it double-hashes SUID binaries and uses
+// POSIX_FADV_DONTNEED (page-cache eviction) on every scan interval.
 type CopyFailConfig struct {
 	Enabled               bool     `yaml:"enabled"`
 	PageCacheCheckEnabled bool     `yaml:"page_cache_check_enabled"`
@@ -259,6 +276,7 @@ func Default() *Config {
 		MapsWatchProcesses:     []string{"nginx", "apache2", "httpd"},
 		MapsPathAllowlist:      []string{},
 		IntegrityVerifyEnabled: false,
+		IntegrityScanInterval:  Duration(6 * time.Hour),
 		IntegrityPaths: []string{
 			"/bin/ls", "/bin/ps", "/usr/bin/ls", "/usr/bin/ps", "/usr/bin/netstat", "/usr/bin/ss",
 		},
@@ -267,6 +285,7 @@ func Default() *Config {
 		WatchDebounce:            Duration(800 * time.Millisecond),
 		WatchSensitivePaths:      true,
 		NetworkScanEnabled:       true,
+		NetworkScanInterval:      Duration(15 * time.Minute),
 		NetworkAllowlist:         []string{"127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "::1/128", "fc00::/7"},
 		RateLimitPerRulePerMin:   120,
 		SpoolDir:                 "/var/lib/ghostcatcher/spool",
@@ -274,11 +293,15 @@ func Default() *Config {
 		AncestryScanEnabled:      true,
 		CopyFail: CopyFailConfig{
 			Enabled:               true,
-			PageCacheCheckEnabled: true,
+			PageCacheCheckEnabled: false,
 		},
 		SuddenRoot: SuddenRootConfig{
 			Enabled:          true,
-			SnapshotInterval: Duration(time.Second),
+			SnapshotInterval: Duration(10 * time.Second),
+		},
+		Sensor: SensorConfig{
+			Backend:    "auto",
+			DebounceMS: 0,
 		},
 		Respond: ResponseConfig{
 			Enabled:                  true,
@@ -329,12 +352,23 @@ func Load(path string) (*Config, error) {
 		c.WebRecentDays = 14
 	}
 	if c.SuddenRoot.Enabled && c.SuddenRoot.SnapshotInterval.Duration() <= 0 {
-		c.SuddenRoot.SnapshotInterval = Duration(time.Second)
+		c.SuddenRoot.SnapshotInterval = Duration(10 * time.Second)
+	}
+	if c.Sensor.Backend == "" {
+		c.Sensor.Backend = "auto"
+	}
+	if c.Sensor.DebounceMS < 0 {
+		c.Sensor.DebounceMS = 0
 	}
 	return c, nil
 }
 
 func (c *Config) Validate() error {
+	switch b := c.Sensor.Backend; b {
+	case "", "auto", "ebpf", "auditd", "audit", "proc-poll", "procpoll", "proc":
+	default:
+		return fmt.Errorf("sensor.backend must be auto|ebpf|auditd|proc-poll, got %q", b)
+	}
 	if !c.SyslogUDP.Enabled {
 		return nil
 	}

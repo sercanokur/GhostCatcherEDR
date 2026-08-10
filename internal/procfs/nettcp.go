@@ -159,6 +159,7 @@ func parseHexAddr(s string) (net.IP, int, error) {
 // SocketInodes returns the set of socket inode numbers owned by pid
 // (via scanning /proc/pid/fd symlinks that point at "socket:[INODE]").
 func SocketInodes(pid int) (map[uint64]struct{}, error) {
+	noteProcRead()
 	base := fmt.Sprintf("/proc/%d/fd", pid)
 	entries, err := os.ReadDir(base)
 	if err != nil {

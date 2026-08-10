@@ -51,7 +51,9 @@ maps_watch_processes:
 maps_path_allowlist_prefixes: []
 
 # dpkg md5sums vs on-disk binaries (Tripwire-style). Ubuntu/Debian only.
+# Inventory runs on integrity_scan_interval (not every scan_interval).
 integrity_verify_enabled: false
+integrity_scan_interval: 6h
 integrity_paths:
   - /bin/ls
   - /bin/ps
@@ -66,15 +68,26 @@ web_recon_child_scan_enabled: true
 watch_authorized_keys: false
 watch_debounce: 800ms
 
+# /proc/net × fd correlation — throttled separately from scan_interval.
+network_scan_enabled: true
+network_scan_interval: 15m
+
+# Runtime syscall sensor. backend: auto|ebpf|auditd|proc-poll
+# Pin ebpf to fail closed if the CO-RE object cannot load.
+# debounce_ms coalesces duplicate fast-path events under ringbuffer pressure.
+sensor:
+  backend: auto
+  debounce_ms: 0
+
 # CVE-2026-31431 ("Copy Fail") detection. Two legs:
 #  1. Live AF_ALG SOCK_SEQPACKET socket() syscalls observed by the
 #     auditd / eBPF sensor and routed through internal/detect/copyfail.
 #  2. Periodic page-cache vs on-disk hash drift on watched SUID binaries.
-# Disable page_cache_check_enabled if the host runs on a filesystem that
-# does not honour POSIX_FADV_DONTNEED (rare); the live leg still works.
+#     Opt-in: double-hashes SUID targets and uses POSIX_FADV_DONTNEED
+#     (page-cache eviction) each scan_interval — expensive on busy hosts.
 copy_fail:
   enabled: true
-  page_cache_check_enabled: true
+  page_cache_check_enabled: false
   # Add operator-specific binaries that legitimately open AF_ALG AEAD
   # sockets (uncommon outside dm-crypt / dm-verity tooling).
   allowed_comm_extras: []
@@ -83,12 +96,13 @@ copy_fail:
   target_suid_binaries: []
 
 # Behavior-only sudden-root detection (CVE-agnostic). Tracks per-process
-# UID/EUID/CapEff via 1s /proc snapshots + live exec sensor seeding.
+# UID/EUID/CapEff via /proc snapshots + live exec sensor seeding.
+# Default 10s balances latency vs host load; lab may use 1s.
 # Known helpers (sudo/su/pkexec/...) are allowlisted; response stays
 # alert_only (audit) for this rule.
 sudden_root:
   enabled: true
-  snapshot_interval: 1s
+  snapshot_interval: 10s
   # Extra basenames merged with built-in helpers.
   allowed_exe_basenames: []
   # Extra ancestor comms treated as legitimate privilege brokers.
